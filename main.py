@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, "/home/atimans/Desktop/project_1/conformalbb/detectron2")
+sys.path.insert(0, "/ssd_4TB/divake/conformal-od/detectron2")
 
 import os
 import argparse
@@ -14,6 +14,23 @@ from data import data_loader
 from model import model_loader
 from control import std_conformal, ens_conformal, cqr_conformal, baseline_conformal
 from model.qr_head import QuantileROIHead
+
+# Add BooleanOptionalAction for Python 3.8 compatibility
+class BooleanOptionalAction(argparse.Action):
+    def __init__(self, option_strings, dest, default=None, help=None, required=None, **kwargs):
+        option_strings = option_strings + [s.replace('--', '--no-') for s in option_strings if s.startswith('--')]
+        super().__init__(option_strings=option_strings, dest=dest, nargs=0, default=default, help=help, 
+                         const=True, **kwargs)
+    
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string is not None and option_string.startswith('--no-'):
+            setattr(namespace, self.dest, False)
+        else:
+            setattr(namespace, self.dest, True)
+
+# Add to argparse if not exists
+if not hasattr(argparse, 'BooleanOptionalAction'):
+    argparse.BooleanOptionalAction = BooleanOptionalAction
 
 
 def create_parser():
