@@ -7,13 +7,13 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
+  OUTPUT_DIR: &outputdir "/ssd_4TB/divake/conformal-od/output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 
 
 DATASETS:
-  DIR: "../../../../media/atimans/hdd/datasets"
+  DIR: "/ssd_4TB/divake/conformal-od/data"
   DATASET:
     NAME: "coco_val"
     IMG_DIR: "coco/val2017"
@@ -50,8 +50,8 @@ MODEL:
   ID: "x101fpn"
   LOCAL_CHECKPOINT: false
   CHECKPOINT_PATH: null
-  FILE: "COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
-  DEVICE: &device "cpu"
+  FILE: "/ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
+  DEVICE: &device "cuda"
   # set to false for EnsConf
   AP_EVAL: false
   BOX_MATCHING: "box"
