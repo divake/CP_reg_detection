@@ -25,14 +25,33 @@ def d2_build_model(cfg: dict, logger):
 
     # Build cfg_model by merging configs from detectron2 and custom
     cfg_model = get_cfg()
-    cfg_model.merge_from_file(  # override d2 base defaults with model
-        model_zoo.get_config_file(file)
-    )
+    
+    # Check if file is an absolute path
+    if file.startswith("/"):
+        cfg_model.merge_from_file(file)  # Use absolute path directly
+    else:
+        cfg_model.merge_from_file(  # override d2 base defaults with model
+            model_zoo.get_config_file(file)
+        )
 
     if cfg.MODEL.LOCAL_CHECKPOINT:
         cfg_model.MODEL.WEIGHTS = cfg.MODEL.CHECKPOINT_PATH
     else:
-        cfg_model.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(file)
+        # If it's an absolute path, extract the filename without extension and use it
+        if file.startswith("/"):
+            import os
+            file_base = os.path.basename(file)
+            file_path = os.path.dirname(file)
+            file_components = file_path.split('/')
+            rel_path = '/'.join(file_components[-2:]) + '/' + file_base
+            try:
+                cfg_model.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(rel_path)
+            except:
+                # Fallback for extracting config name - COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml
+                rel_path = "COCO-Detection/" + file_base
+                cfg_model.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(rel_path)
+        else:
+            cfg_model.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(file)
     logger.info(f"Set model weights path to '{cfg_model.MODEL.WEIGHTS}'.")
 
     cfg_my_model = cfg.MODEL.CONFIG
