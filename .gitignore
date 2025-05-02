@@ -172,3 +172,5 @@ data/
 **/.claude/settings.local.json
 log.txt
 output/
+commands.txt
+run_error_log.txt
