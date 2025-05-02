@@ -19,7 +19,21 @@ in the notebook via script calls. You can experiment with using cv2.imshow inste
 import torch
 import cv2
 import matplotlib.colors as mcolors
-from google.colab.patches import cv2_imshow
+try:
+    from google.colab.patches import cv2_imshow
+except ModuleNotFoundError:
+    # Define a local alternative for cv2_imshow
+    def cv2_imshow(img):
+        """Display an image using cv2, for local environments."""
+        import matplotlib.pyplot as plt
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            # Convert BGR to RGB for matplotlib
+            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        else:
+            # Grayscale or other format
+            plt.imshow(img, cmap='gray')
+        plt.axis('off')
+        plt.show()
 
 from detectron2.structures import Boxes, Instances
 from plots.visualizer import Visualizer, VisualizerFill

@@ -1,7 +1,5 @@
 ## Overview
 
-This is the public code repository for our work
-[Adaptive Bounding Box Uncertainties via Two-Step Conformal Prediction](https://arxiv.org/abs/2403.07263) presented as an oral paper at ECCV 2024.
 
 <p align="center">
   <img src="https://github.com/alextimans/conformal-od/blob/main/method-diag.jpg" height="50%">  
@@ -14,17 +12,7 @@ Quantifying a model's predictive uncertainty is essential for safety-critical ap
 
 ---
 
-#### Citation
-If you find this repository useful, please consider citing our work:
 
-```
-@inproceedings{timans2024conformalod,
-    title = {Adaptive Bounding Box Uncertainties via Two-Step Conformal Prediction}, 
-    author = {Alexander Timans and Christoph-Nikolas Straehle and Kaspar Sakmann and Eric Nalisnick},
-    booktitle = {Proceedings of the European Conference on Computer Vision},
-    year = {2024}
-}
-```
 
 #### Acknowledgements
 The [Robert Bosch GmbH](https://www.bosch.com) is acknowledged for financial support.
