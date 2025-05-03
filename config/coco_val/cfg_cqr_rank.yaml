@@ -1,89 +1,46 @@
-########################
-### BASE CONFIG FILE ###
-########################
-
-PROJECT:
-  CODE_DIR: "conformalbb"
-  CONFIG_DIR: "conformalbb/config"
-  CHECKPOINT_DIR: "checkpoints"
-  RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
-  PLOT_DIR: "plots"
-  SEED: &seed 6666666
-
-
-DATASETS:
-  DIR: "../../../../media/atimans/hdd/datasets"
-  DATASET:
-    NAME: "coco_val"
-    IMG_DIR: "coco/val2017"
-    ANN_FILE: "coco/annotations/instances_val2017.json"
-    METADATA_FILE: null
-    FORMAT: "coco"
-    # set to BGR for coco, RGB for bdd and cityscapes
-    CHANNELS: &channels "BGR"
-    # set to true for coco, false for bdd and cityscapes
-    FILTER_EMPTY: true
-
-
-DATALOADER:
-  TRAIN:
-    TOTAL_BATCH_SIZE: &batchsize 16
-    ASPECT_RATIO_GROUPING: &aspectratio true 
-    NUM_WORKERS: &num_workers 0
-    COLLATE_FN: &collate null
-  TEST:
-    BATCH_SIZE: 1
-    NUM_WORKERS: *num_workers
-    COLLATE_FN: *collate
-
-
 CALIBRATION:
+  BOX_CORRECTION: rank_coord
+  BOX_SET_STRATEGY: max
   FRACTION: 0.5
   TRIALS: 100
-  BOX_CORRECTION: "rank_coord"
-  BOX_SET_STRATEGY: "max" 
-
-
-# for CQRConf and QR training 
-QUANTILE_REGRESSION:
-  QUANTILES:
-  - 0.05
-  - 0.5
-  - 0.95
-  FREEZE_PARAMS: "all"
-  QUANTILE_INDICES:
-  - 0
-  - 2
-
-
+DATALOADER:
+  TEST:
+    BATCH_SIZE: 1
+    COLLATE_FN: null
+    NUM_WORKERS: 0
+  TRAIN:
+    ASPECT_RATIO_GROUPING: true
+    COLLATE_FN: null
+    NUM_WORKERS: 0
+    TOTAL_BATCH_SIZE: 16
+DATASETS:
+  DATASET:
+    ANN_FILE: coco/annotations/instances_val2017.json
+    CHANNELS: BGR
+    FILTER_EMPTY: true
+    FORMAT: coco
+    IMG_DIR: coco/val2017
+    METADATA_FILE: null
+    NAME: coco_val
+  DIR: /ssd_4TB/divake/conformal-od/data
 MODEL:
-  NAME: "Faster R-CNN X101-FPN"
-  ID: "x101fpn"
-  LOCAL_CHECKPOINT: true
-  CHECKPOINT_PATH: "checkpoints/x101fpn_train_qr_5k_postprocess/model_0002999.pth"
-  FILE: "COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
-  DEVICE: &device "cpu"
-  # set to false for EnsConf
   AP_EVAL: false
-  BOX_MATCHING: "box"
-  IOU_THRESH_TEST: 0.5 
+  BOX_MATCHING: box
+  CHECKPOINT_PATH: checkpoints/x101fpn_train_qr_5k_postprocess/model_0002999.pth
   CLASS_MATCHING: false
-
-
-  # DETECTRON2 MODEL CONFIG
   CONFIG:
-    OUTPUT_DIR: *outputdir
-    SEED: *seed
+    DATALOADER:
+      ASPECT_RATIO_GROUPING: true
+      NUM_WORKERS: 0
     INPUT:
       CROP:
         ENABLED: false
         SIZE:
         - 0.9
         - 0.9
-        TYPE: "relative_range"
-      FORMAT: *channels
-      MASK_FORMAT: "polygon"
+        TYPE: relative_range
+      FORMAT: BGR
+      MASK_FORMAT: polygon
       MAX_SIZE_TEST: 1333
       MAX_SIZE_TRAIN: 1333
       MIN_SIZE_TEST: 800
@@ -94,21 +51,42 @@ MODEL:
       - 736
       - 768
       - 800
-      MIN_SIZE_TRAIN_SAMPLING: "choice"
-      RANDOM_FLIP: "horizontal"
-    DATALOADER:
-      ASPECT_RATIO_GROUPING: *aspectratio
-      NUM_WORKERS: *num_workers
+      MIN_SIZE_TRAIN_SAMPLING: choice
+      RANDOM_FLIP: horizontal
     MODEL:
-      DEVICE: *device
+      DEVICE: cpu
       ROI_HEADS:
         NAME: QuantileROIHead
+        NMS_THRESH_TEST: 0.6
         NUM_CLASSES: 80
         SCORE_THRESH_TEST: 0.5
-        NMS_THRESH_TEST: 0.6
+    OUTPUT_DIR: ../../../../media/atimans/hdd/output
+    SEED: 6666666
     SOLVER:
       BASE_LR: 0.02
       CHECKPOINT_PERIOD: 500
-      IMS_PER_BATCH: *batchsize
+      IMS_PER_BATCH: 16
       MAX_ITER: 5000
-    
+  DEVICE: cpu
+  FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml
+  ID: x101fpn
+  IOU_THRESH_TEST: 0.5
+  LOCAL_CHECKPOINT: true
+  NAME: Faster R-CNN X101-FPN
+PROJECT:
+  CHECKPOINT_DIR: checkpoints
+  CODE_DIR: conformalbb
+  CONFIG_DIR: conformalbb/config
+  OUTPUT_DIR: /ssd_4TB/divake/conformal-od/output
+  PLOT_DIR: plots
+  RESULTS_DIR: results
+  SEED: 6666666
+QUANTILE_REGRESSION:
+  FREEZE_PARAMS: all
+  QUANTILES:
+  - 0.05
+  - 0.5
+  - 0.95
+  QUANTILE_INDICES:
+  - 0
+  - 2
