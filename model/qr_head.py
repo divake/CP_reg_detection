@@ -59,7 +59,7 @@ class QuantileFastRCNNOutputLayer(FastRCNNOutputLayers):
         super().__init__(cfg, input_shape)
 
         # add quantile heads
-        cfg_q = io_file.load_yaml("qr_cfg", "conformalbb/model", True)
+        cfg_q = io_file.load_yaml("qr_cfg", "model", True)
         self.quantiles = cfg_q.QUANTILES
         self.q_names = [f"bbox_pred_q{int(q*100)}" for q in self.quantiles]
         q_in = self.bbox_pred.in_features
