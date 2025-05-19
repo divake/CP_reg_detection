@@ -8,6 +8,7 @@ from typing import Tuple, Union, Dict, List, Optional
 import torch
 from torch import nn
 from torch.nn import functional as F
+import os
 
 from detectron2.modeling import (
     ROI_HEADS_REGISTRY,
@@ -59,7 +60,9 @@ class QuantileFastRCNNOutputLayer(FastRCNNOutputLayers):
         super().__init__(cfg, input_shape)
 
         # add quantile heads
-        cfg_q = io_file.load_yaml("qr_cfg", "model", True)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        cfg_q = io_file.load_yaml("qr_cfg", os.path.join(project_root, "model"), True)
+
         self.quantiles = cfg_q.QUANTILES
         self.q_names = [f"bbox_pred_q{int(q*100)}" for q in self.quantiles]
         q_in = self.bbox_pred.in_features
