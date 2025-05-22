@@ -58,6 +58,10 @@ def d2_build_model(cfg: dict, logger):
     cfg_model.merge_from_other_cfg(  # override d2 model defaults with custom
         cfg_my_model
     )
+    
+    # Change the device to cuda:1 instead of the default cuda:0
+    cfg_model.MODEL.DEVICE = "cuda:1"
+    logger.info(f"Set model device to '{cfg_model.MODEL.DEVICE}'.")
 
     model = build_model(cfg_model)  # Builds structure with random params
     assert isinstance(model, Module), model
