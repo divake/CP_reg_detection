@@ -1301,7 +1301,9 @@ class Visualizer:
         Convert different format of boxes to an NxB array, where B = 4 or 5 is the box dimension.
         """
         if isinstance(boxes, Boxes) or isinstance(boxes, RotatedBoxes):
-            return boxes.tensor.detach().numpy()
+            return boxes.tensor.detach().cpu().numpy()
+        elif isinstance(boxes, torch.Tensor):
+            return boxes.detach().cpu().numpy()
         else:
             return np.asarray(boxes)
 
@@ -2364,7 +2366,9 @@ class VisualizerFill:
         Convert different format of boxes to an NxB array, where B = 4 or 5 is the box dimension.
         """
         if isinstance(boxes, Boxes) or isinstance(boxes, RotatedBoxes):
-            return boxes.tensor.detach().numpy()
+            return boxes.tensor.detach().cpu().numpy()
+        elif isinstance(boxes, torch.Tensor):
+            return boxes.detach().cpu().numpy()
         else:
             return np.asarray(boxes)
 
