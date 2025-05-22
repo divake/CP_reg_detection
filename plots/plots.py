@@ -401,10 +401,14 @@ def get_pred(args, controller, model, img, img_id, idx, filter_for_class, filter
 
     return gt, pred_match, box_quant, box_quant_true, lab_gt, lab_pred, lab_set
 
-def plot_multi_method_comparison(img_name="000000054593", class_name="person", dataset="coco_val", device="cuda:1", to_file=False):
+def plot_multi_method_comparison(img_name="000000054593", class_name="person", dataset="coco_val", device="cuda:1", to_file=True):
     """
     Plot prediction intervals for a specific image using multiple methods (std, ens, cqr)
     """
+    # Create output directory for saving plots
+    output_plots_dir = "/ssd_4TB/divake/conformal-od/output/plots"
+    Path(output_plots_dir).mkdir(exist_ok=True, parents=True)
+    
     # Setup for each method
     args_std = get_args("std", dataset, device)
     args_ens = get_args("ens", dataset, device)
@@ -540,16 +544,17 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     # Plot with label set quantiles
     cn = class_name.replace(" ", "") if class_name else "all"
     
-    fname_std = f"{args_std.risk_control}_{args_std.label_set}_{cn}_idx{idx.item()}_img{img_id}.jpg"
-    fname_ens = f"{args_ens.risk_control}_{args_ens.label_set}_{cn}_idx{idx.item()}_img{img_id}.jpg"
-    fname_cqr = f"{args_cqr.risk_control}_{args_cqr.label_set}_{cn}_idx{idx.item()}_img{img_id}.jpg"
+    # Create filenames for output directory
+    output_fname_std_labelset = os.path.join(output_plots_dir, f"{args_std.risk_control}_{args_std.label_set}_{cn}_img{img_id}.jpg")
+    output_fname_ens_labelset = os.path.join(output_plots_dir, f"{args_ens.risk_control}_{args_ens.label_set}_{cn}_img{img_id}.jpg")
+    output_fname_cqr_labelset = os.path.join(output_plots_dir, f"{args_cqr.risk_control}_{args_cqr.label_set}_{cn}_img{img_id}.jpg")
 
     print(f"FIG 1.1: Label set quant; {args_std.risk_control} - {args_std.label_set}\n")
     plot_util.d2_plot_pi(args_std.risk_control, img, gt_std.gt_boxes, pred_match_std, box_quant_std,
                         channels, draw_labels=[], 
                         colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                         lw=1.5, notebook=True, to_file=to_file,
-                        filename=os.path.join(plotdir_std, fname_std),
+                        filename=output_fname_std_labelset,
                         label_gt=lab_gt_std, label_set=lab_set_std)
 
     print(f"FIG 1.2: Label set quant; {args_ens.risk_control} - {args_ens.label_set}\n")
@@ -557,7 +562,7 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
                         channels, draw_labels=[], 
                         colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                         lw=1.5, notebook=True, to_file=to_file,
-                        filename=os.path.join(plotdir_ens, fname_ens),
+                        filename=output_fname_ens_labelset,
                         label_gt=lab_gt_ens, label_set=lab_set_ens)
 
     print(f"FIG 1.3: Label set quant; {args_cqr.risk_control} - {args_cqr.label_set}\n")
@@ -565,21 +570,22 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
                         channels, draw_labels=[], 
                         colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                         lw=1.5, notebook=True, to_file=to_file,
-                        filename=os.path.join(plotdir_cqr, fname_cqr),
+                        filename=output_fname_cqr_labelset,
                         label_gt=lab_gt_cqr, label_set=lab_set_cqr)
     
     # Optional: plot with oracle quantiles
     if to_file:
-        fname_std = f"{args_std.risk_control}_oracle_{cn}_idx{idx.item()}_img{img_id}.jpg"
-        fname_ens = f"{args_ens.risk_control}_oracle_{cn}_idx{idx.item()}_img{img_id}.jpg"
-        fname_cqr = f"{args_cqr.risk_control}_oracle_{cn}_idx{idx.item()}_img{img_id}.jpg"
+        # Create filenames for oracle plots
+        output_fname_std_oracle = os.path.join(output_plots_dir, f"{args_std.risk_control}_oracle_{cn}_img{img_id}.jpg")
+        output_fname_ens_oracle = os.path.join(output_plots_dir, f"{args_ens.risk_control}_oracle_{cn}_img{img_id}.jpg")
+        output_fname_cqr_oracle = os.path.join(output_plots_dir, f"{args_cqr.risk_control}_oracle_{cn}_img{img_id}.jpg")
 
         print(f"FIG 2.1: Oracle; {args_std.risk_control}\n")
         plot_util.d2_plot_pi(args_std.risk_control, img, gt_std.gt_boxes, pred_match_std, box_quant_true_std,
                             channels, draw_labels=[], 
                             colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                             lw=1.5, notebook=True, to_file=to_file,
-                            filename=os.path.join(plotdir_std, fname_std),
+                            filename=output_fname_std_oracle,
                             label_gt=lab_gt_std, label_set=lab_set_std)
 
         print(f"FIG 2.2: Oracle; {args_ens.risk_control}\n")
@@ -587,7 +593,7 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
                             channels, draw_labels=[], 
                             colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                             lw=1.5, notebook=True, to_file=to_file,
-                            filename=os.path.join(plotdir_ens, fname_ens),
+                            filename=output_fname_ens_oracle,
                             label_gt=lab_gt_ens, label_set=lab_set_ens)
 
         print(f"FIG 2.3: Oracle; {args_cqr.risk_control}\n")
@@ -595,8 +601,18 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
                             channels, draw_labels=[], 
                             colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
                             lw=1.5, notebook=True, to_file=to_file,
-                            filename=os.path.join(plotdir_cqr, fname_cqr),
+                            filename=output_fname_cqr_oracle,
                             label_gt=lab_gt_cqr, label_set=lab_set_cqr)
+    
+    # Print the output paths
+    print("\nSaved plots to:")
+    print(f"  Standard model: {output_fname_std_labelset}")
+    print(f"  Ensemble model: {output_fname_ens_labelset}")
+    print(f"  CQR model: {output_fname_cqr_labelset}")
+    if to_file:
+        print(f"  Standard model (oracle): {output_fname_std_oracle}")
+        print(f"  Ensemble model (oracle): {output_fname_ens_oracle}")
+        print(f"  CQR model (oracle): {output_fname_cqr_oracle}")
 
 if __name__ == "__main__":
     # Use default parameters matching the notebook
@@ -605,5 +621,5 @@ if __name__ == "__main__":
         class_name="person",
         dataset="coco_val",
         device="cuda:1",
-        to_file=False
+        to_file=True
     )
