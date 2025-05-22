@@ -113,9 +113,12 @@ def d2_plot_pi(
     labels = _create_text_labels(label_gt, label_set, pred.scores, draw_labels)
     if labels is not None:  # make it the same length as nr_boxes
         labels = labels + [x for item in labels for x in (item, item)]
+        
+    # Move boxes to CPU before visualization
+    boxes_cpu = boxes.cpu() if isinstance(boxes, torch.Tensor) else boxes
 
     out = viz.overlay_instances(
-        boxes=boxes,
+        boxes=boxes_cpu,
         box_ids=box_ids,
         labels=labels,
         assigned_colors=box_colors,
@@ -139,7 +142,11 @@ def _get_boxes_std(gt_box, pred, quant, img_h, img_w, colors):
     # Prepare collection
     nr_gt, nr_pred = len(gt_box), len(pred.pred_boxes)
     nr_boxes = nr_gt + nr_pred * 2
-    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32)
+    
+    # Get device for tensors
+    device = pred.pred_boxes.tensor.device
+    
+    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32, device=device)
     box_colors = []
     box_ids = []
 
@@ -157,9 +164,9 @@ def _get_boxes_std(gt_box, pred, quant, img_h, img_w, colors):
 
         pi = pred_intervals.fixed_pi(predb, q)
         # lower PI bound: x0+q, y0+q, x1-q, y1-q
-        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]])
+        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]], device=device)
         # upper PI bound: x0-q, y0-q, x1+q, y1+q
-        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]])
+        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]], device=device)
         # clip to img size and store
         boxes[j], boxes[j + 1] = _d2_limit_pi_bounds(predb, lower, upper, img_h, img_w)
 
@@ -173,7 +180,11 @@ def _get_boxes_ens(gt_box, pred, quant, img_h, img_w, colors):
     # Prepare collection
     nr_gt, nr_pred = len(gt_box), len(pred.pred_boxes)
     nr_boxes = nr_gt + nr_pred * 2
-    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32)
+    
+    # Get device for tensors
+    device = pred.pred_boxes.tensor.device
+    
+    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32, device=device)
     box_colors = []
     box_ids = []
 
@@ -192,9 +203,9 @@ def _get_boxes_ens(gt_box, pred, quant, img_h, img_w, colors):
 
         pi = pred_intervals.norm_pi(predb, unc, q)
         # lower PI bound: x0+q*unc, y0+q*unc, x1-q*unc, y1-q*unc
-        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]])
+        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]], device=device)
         # upper PI bound: x0-q*unc, y0-q*unc, x1+q*unc, y1+q*unc
-        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]])
+        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]], device=device)
         # clip to img size and store
         boxes[j], boxes[j + 1] = _d2_limit_pi_bounds(predb, lower, upper, img_h, img_w)
 
@@ -208,7 +219,11 @@ def _get_boxes_cqr(gt_box, pred, quant, img_h, img_w, colors):
     # Prepare collection
     nr_gt, nr_pred = len(gt_box), len(pred.pred_boxes)
     nr_boxes = nr_gt + nr_pred * 2
-    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32)
+    
+    # Get device for tensors
+    device = pred.pred_boxes.tensor.device
+    
+    boxes = torch.empty(size=(nr_boxes, 4), dtype=torch.float32, device=device)
     box_colors = []
     box_ids = []
 
@@ -228,9 +243,9 @@ def _get_boxes_cqr(gt_box, pred, quant, img_h, img_w, colors):
 
         pi = pred_intervals.quant_pi(pred_l, pred_u, q)
         # lower PI bound: x0_l+q, y0_l+q, x1_l-q, y1_l-q
-        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]])
+        lower = torch.tensor([pi[0, 1], pi[1, 1], pi[2, 0], pi[3, 0]], device=device)
         # upper PI bound: x0_h-q, y0_h-q, x1_h+q, y1_h+q
-        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]])
+        upper = torch.tensor([pi[0, 0], pi[1, 0], pi[2, 1], pi[3, 1]], device=device)
         # clip to img size and store
         boxes[j], boxes[j + 1] = _d2_limit_pi_bounds(predb, lower, upper, img_h, img_w)
 
@@ -245,13 +260,17 @@ def _d2_limit_pi_bounds(pred, lower, upper, img_h, img_w):
     pred_mid_w = pred[0] + 0.5 * (pred[2] - pred[0])  # x0 + 1/2(x1-x0)
     pred_mid_h = pred[1] + 0.5 * (pred[3] - pred[1])  # y0 + 1/2(y1-y0)
 
+    # Get device of input tensors
+    device = pred.device
+
     lower = torch.tensor(
         [
             lower[0].clamp_max(pred_mid_w),
             lower[1].clamp_max(pred_mid_h),
             lower[2].clamp_min(pred_mid_w),
             lower[3].clamp_min(pred_mid_h),
-        ]
+        ],
+        device=device
     )
     upper = torch.tensor(
         [
@@ -259,7 +278,8 @@ def _d2_limit_pi_bounds(pred, lower, upper, img_h, img_w):
             upper[1].clamp_min(0.0),
             upper[2].clamp_max(img_w),
             upper[3].clamp_max(img_h),
-        ]
+        ],
+        device=device
     )
     return lower, upper
 
