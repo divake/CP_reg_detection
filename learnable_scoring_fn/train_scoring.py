@@ -40,69 +40,56 @@ def create_parser():
     """Create argument parser for training."""
     parser = argparse.ArgumentParser(description="Train learnable scoring function for conformal prediction")
     
-    # Data arguments
-    parser.add_argument("--config_file", type=str, default="cfg_std_rank", 
-                       help="Config file name")
-    parser.add_argument("--config_path", type=str, default="/ssd_4TB/divake/conformal-od/config/coco_val",
-                       help="Path to config directory")
-    parser.add_argument("--subset_size", type=int, default=50000,
-                       help="Size of training subset")
+    # Data and model configuration
+    parser.add_argument('--config_file', type=str, required=True, help='Configuration file name')
+    parser.add_argument('--config_path', type=str, required=True, help='Path to config directory')
     
-    # Model arguments  
-    parser.add_argument("--input_dim", type=int, default=13,
-                       help="Input feature dimension")
-    parser.add_argument("--hidden_dims", type=int, nargs="+", default=[128, 64, 32],
-                       help="Hidden layer dimensions")
-    parser.add_argument("--dropout_rate", type=float, default=0.2,
-                       help="Dropout rate")
+    # Caching options for collect_predictions
+    parser.add_argument('--load_predictions', type=str, default=None, help='Load cached predictions from this path (skip collect_predictions)')
+    parser.add_argument('--save_predictions', action='store_true', help='Save predictions for future use')
+    parser.add_argument('--predictions_cache_dir', type=str, default=None, help='Directory to save/load predictions cache')
     
-    # Training arguments
-    parser.add_argument("--num_epochs", type=int, default=100,
-                       help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=64,
-                       help="Batch size")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
-                       help="Learning rate")
-    parser.add_argument("--weight_decay", type=float, default=1e-5,
-                       help="Weight decay")
+    # Training data configuration
+    parser.add_argument('--subset_size', type=int, default=10000, help='Maximum number of training samples')
+    parser.add_argument('--train_frac', type=float, default=0.5, help='Fraction of data for training')
+    parser.add_argument('--cal_frac', type=float, default=0.3, help='Fraction of data for calibration')
+    parser.add_argument('--val_frac', type=float, default=0.2, help='Fraction of data for validation')
     
-    # Loss function arguments
-    parser.add_argument("--target_coverage", type=float, default=0.9,
-                       help="Target coverage level")
-    parser.add_argument("--initial_lambda", type=float, default=0.01,
-                       help="Initial lambda for width penalty")
-    parser.add_argument("--final_lambda", type=float, default=0.1,
-                       help="Final lambda for width penalty")
-    parser.add_argument("--warmup_epochs", type=int, default=20,
-                       help="Epochs for lambda warmup")
-    parser.add_argument("--ramp_epochs", type=int, default=30,
-                       help="Epochs to ramp lambda")
+    # Model architecture
+    parser.add_argument('--input_dim', type=int, default=13, help='Input feature dimension')
+    parser.add_argument('--hidden_dims', type=int, nargs='+', default=[128, 64, 32], help='Hidden layer dimensions')
+    parser.add_argument('--dropout_rate', type=float, default=0.2, help='Dropout rate')
     
-    # Data split arguments
-    parser.add_argument("--train_frac", type=float, default=0.5,
-                       help="Training data fraction")
-    parser.add_argument("--cal_frac", type=float, default=0.3,
-                       help="Calibration data fraction")
-    parser.add_argument("--val_frac", type=float, default=0.2,
-                       help="Validation data fraction")
+    # Training parameters
+    parser.add_argument('--num_epochs', type=int, default=50, help='Number of training epochs')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     
-    # I/O arguments
-    parser.add_argument("--output_dir", type=str, default="/ssd_4TB/divake/conformal-od/learnable_scoring_fn/experiments",
-                       help="Output directory for experiments")
-    parser.add_argument("--exp_name", type=str, default=None,
-                       help="Experiment name (auto-generated if None)")
-    parser.add_argument("--load_data", type=str, default=None,
-                       help="Path to load preprocessed data")
-    parser.add_argument("--save_data", action="store_true",
-                       help="Save preprocessed data")
+    # Coverage loss parameters
+    parser.add_argument('--target_coverage', type=float, default=0.9, help='Target coverage level')
+    parser.add_argument('--initial_lambda', type=float, default=0.01, help='Initial lambda for coverage loss')
+    parser.add_argument('--final_lambda', type=float, default=0.1, help='Final lambda for coverage loss')
+    parser.add_argument('--warmup_epochs', type=int, default=10, help='Number of warmup epochs')
+    parser.add_argument('--ramp_epochs', type=int, default=20, help='Number of ramp epochs for lambda schedule')
     
-    # Other arguments
-    parser.add_argument("--device", type=str, default="cuda",
-                       help="Device to use")
-    parser.add_argument("--seed", type=int, default=42,
-                       help="Random seed")
-    parser.add_argument("--save_every", type=int, default=10,
-                       help="Save checkpoint every N epochs")
+    # Output and logging
+    parser.add_argument('--output_dir', type=str, default='learnable_scoring_fn/experiments', help='Output directory')
+    parser.add_argument('--exp_name', type=str, default=None, help='Experiment name')
+    parser.add_argument('--save_every', type=int, default=10, help='Save checkpoint every N epochs')
+    parser.add_argument('--device', type=str, default='cuda', help='Device to use (cuda/cpu)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    
+    # Data saving/loading
+    parser.add_argument('--save_data', action='store_true', help='Save processed training data')
+    parser.add_argument('--load_data', type=str, default=None, help='Load preprocessed data from path')
+    
+    # Required arguments for compatibility
+    parser.add_argument('--alpha', type=float, default=0.1, help='Alpha level for conformal prediction')
+    parser.add_argument('--label_set', type=str, default='class_threshold', help='Label set type')
+    parser.add_argument('--label_alpha', type=float, default=0.1, help='Label alpha')
+    parser.add_argument('--risk_control', type=bool, default=True, help='Risk control flag')
+    parser.add_argument('--save_label_set', type=bool, default=True, help='Save label set flag')
     
     return parser
 
@@ -353,23 +340,54 @@ def main():
         data_list = get_detection_dataset_dicts(
             data_name, filter_empty=cfg.DATASETS.DATASET.FILTER_EMPTY
         )
-        dataloader = data_loader.d2_load_dataset_from_dict(
-            data_list, cfg, None, logger=logger
-        )
-        metadata = MetadataCatalog.get(data_name).as_dict()
-        nr_class = len(metadata["thing_classes"])
-        nr_img = len(data_list)
         
-        # Initialize and run data collection
-        logger.info("Collecting predictions for training data...")
-        controller = StdConformal(cfg, args, nr_class, exp_dir, log=None, logger=logger)
-        controller.set_collector(nr_class, nr_img)
+        # Set up predictions cache directory
+        if args.predictions_cache_dir is None:
+            cache_dir = os.path.join(exp_dir, 'predictions_cache')
+        else:
+            cache_dir = args.predictions_cache_dir
+        Path(cache_dir).mkdir(parents=True, exist_ok=True)
         
-        # Load model and collect predictions
-        cfg_model, model = model_loader.d2_build_model(cfg, logger=logger)
-        model_loader.d2_load_model(cfg_model, model, logger=logger)
+        # Cache file paths
+        img_list_path = os.path.join(cache_dir, f'{data_name}_img_list.json')
+        ist_list_path = os.path.join(cache_dir, f'{data_name}_ist_list.json')
         
-        img_list, ist_list = controller.collect_predictions(model, dataloader, verbose=False)
+        # Load or collect predictions
+        if args.load_predictions and os.path.exists(img_list_path) and os.path.exists(ist_list_path):
+            logger.info(f"Loading cached predictions from {cache_dir}")
+            img_list = io_file.load_json(f'{data_name}_img_list', cache_dir)
+            ist_list = io_file.load_json(f'{data_name}_ist_list', cache_dir)
+            
+            # We still need to build the model for feature extraction
+            cfg_model, model = model_loader.d2_build_model(cfg, logger=logger)
+            model_loader.d2_load_model(cfg_model, model, logger=logger)
+            
+        else:
+            logger.info("Collecting predictions (this may take 6-10 minutes)...")
+            
+            # Build model config before creating dataloader
+            cfg_model, model = model_loader.d2_build_model(cfg, logger=logger)
+            model_loader.d2_load_model(cfg_model, model, logger=logger)
+            
+            dataloader = data_loader.d2_load_dataset_from_dict(
+                data_list, cfg, cfg_model, logger=logger
+            )
+            metadata = MetadataCatalog.get(data_name).as_dict()
+            nr_class = len(metadata["thing_classes"])
+            nr_img = len(data_list)
+            
+            # Initialize and run data collection
+            controller = StdConformal(cfg, args, nr_class, exp_dir, log=None, logger=logger)
+            controller.set_collector(nr_class, nr_img)
+            
+            img_list, ist_list = controller.collect_predictions(model, dataloader, verbose=False)
+            
+            # Save predictions if requested
+            if args.save_predictions:
+                logger.info(f"Saving predictions cache to {cache_dir}")
+                io_file.save_json(img_list, f'{data_name}_img_list', cache_dir)
+                io_file.save_json(ist_list, f'{data_name}_ist_list', cache_dir)
+                logger.info("Predictions cached for future use")
         
         # Prepare training data
         logger.info("Preparing training data...")

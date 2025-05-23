@@ -118,13 +118,16 @@ class FeatureExtractor:
         if self.feature_stats is None:
             raise ValueError("Must call fit_normalizer() first")
         
+        # Get the device of input features
+        device = features.device
+        
         # Apply different normalization strategies for different feature types
         normalized = features.clone()
         
         # Coordinates (0:4): min-max normalization to [0, 1]
         coord_features = features[:, :4]
-        coord_min = self.feature_stats['min'][:4]
-        coord_max = self.feature_stats['max'][:4]
+        coord_min = self.feature_stats['min'][:4].to(device)
+        coord_max = self.feature_stats['max'][:4].to(device)
         coord_range = (coord_max - coord_min).clamp(min=1e-6)
         normalized[:, :4] = (coord_features - coord_min) / coord_range
         
@@ -140,8 +143,8 @@ class FeatureExtractor:
         zscore_indices = [5, 6]  # log_area, aspect_ratio
         for idx in zscore_indices:
             if idx < features.shape[1]:
-                mean_val = self.feature_stats['mean'][idx]
-                std_val = self.feature_stats['std'][idx]
+                mean_val = self.feature_stats['mean'][idx].to(device)
+                std_val = self.feature_stats['std'][idx].to(device)
                 normalized[:, idx] = (features[:, idx] - mean_val) / std_val
         
         return normalized
