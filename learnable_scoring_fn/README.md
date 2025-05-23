@@ -1,131 +1,239 @@
 # Learnable Scoring Function for Conformal Object Detection
 
-This module implements a learnable scoring function for conformal prediction in object detection. It builds upon the existing conformal prediction framework but replaces handcrafted nonconformity scores with a neural network that learns to predict optimal scores for better prediction intervals.
+This module implements a **learnable scoring function** for conformal prediction in object detection, following a clean separation between training and usage.
 
-## Overview
+## 🎯 **Overview**
 
-The learnable scoring function trains an MLP to predict nonconformity scores that result in well-calibrated prediction intervals with high coverage and minimal width. The key advantages of this approach are:
+Instead of using fixed scoring functions like `abs_res()`, this approach trains a neural network to learn optimal nonconformity scores that:
+- **Achieve target coverage** (90%) 
+- **Minimize prediction interval width**
+- **Adapt to different object types and features**
 
-1. **Adaptive Scoring**: The model learns which features are most predictive of uncertainty for each coordinate
-2. **Optimized Intervals**: Directly optimizes for both coverage and efficiency
-3. **Leverages Existing Framework**: Builds on the standard conformal prediction pipeline
-
-## Components
-
-- `model.py`: Contains the MLP architecture and loss functions
-- `learnable_conformal.py`: Main controller class implementing the risk control procedure
-- `train_learnable.py`: Script for training and evaluating the model
-- `update_plots.py`: Utility to update the plots.py file to support comparison with the learnable method
-
-## Usage
-
-### Training the Model
-
-To train the learnable scoring function on the COCO validation dataset:
-
-```bash
-cd /ssd_4TB/divake/conformal-od
-python -m learnable_scoring_fn.train_learnable \
-  --config_file cfg_std_rank \
-  --config_path /ssd_4TB/divake/conformal-od/config/coco_val \
-  --device cuda
-```
-
-This will:
-1. Collect predictions from the base model
-2. Split the data into train/calibration/validation sets
-3. Train the MLP to predict optimal scoring values
-4. Run the conformal calibration procedure
-5. Evaluate the performance of the method
-
-### Adding to Comparison Plots
-
-To update the `plots.py` file to include the learnable scoring function in comparison plots:
-
-```bash
-python -m learnable_scoring_fn.update_plots
-```
-
-This script will:
-1. Create a backup of the original `plots.py`
-2. Update the functions to support the learnable scoring function
-3. Add imports for the necessary modules
-
-After updating, you can run the multi-method comparison plots with:
-
-```bash
-cd /ssd_4TB/divake/conformal-od
-python -m plots.plots
-```
-
-Or from a Python session/notebook:
-
-```python
-from plots.plots import plot_multi_method_comparison
-
-# Compare all methods
-plot_multi_method_comparison(
-    img_name="000000054593", 
-    class_name="person", 
-    dataset="coco_val", 
-    device="cuda:0", 
-    to_file=True
-)
-
-# Compare specific methods
-plot_multi_method_comparison(
-    img_name="000000054593", 
-    class_name="person", 
-    dataset="coco_val", 
-    device="cuda:0", 
-    to_file=True,
-    methods=["std", "learn"]  # Only compare standard and learnable methods
-)
-```
-
-## Implementation Details
-
-The learnable scoring function follows these steps:
-
-1. **Data Collection**: Collects predictions from the base object detection model
-2. **Feature Extraction**: Extracts features for the MLP (box coordinates, confidence scores)
-3. **Training**:
-   - Trains the MLP to predict nonconformity scores
-   - Uses a loss function that balances coverage and interval width
-   - Recalculates tau (quantile threshold) after each epoch
-4. **Calibration**: Uses a calibration set to find the optimal quantile (tau) for the desired coverage level
-5. **Prediction**: Applies the learned scoring function to create prediction intervals
-
-The output format matches the existing controllers, making it compatible with the rest of the codebase.
-
-## Results Interpretation
-
-After training, the model will generate several plots in the output directory:
-
-- `loss_curve.png`: Training and validation loss over epochs
-- `coverage.png`: Coverage metric over epochs
-- `width.png`: Prediction interval width over epochs
-- `coverage_width.png`: Combined plot showing both metrics
-
-These plots help visualize the learning progress and the trade-off between coverage and efficiency.
-
-## File Structure
+## 📁 **Directory Structure**
 
 ```
 learnable_scoring_fn/
-├── __init__.py             # Module initialization
-├── model.py                # MLP architecture and loss functions
-├── learnable_conformal.py  # Main controller class
-├── train_learnable.py      # Training script
-├── update_plots.py         # Plot update utility
+├── __init__.py              # Package initialization
+├── model.py                 # Neural network architecture & loss functions
+├── feature_utils.py         # Feature extraction & normalization  
+├── data_utils.py           # Data loading & preprocessing
+├── train_scoring.py        # Main training script
+├── run_training.py         # Simple training wrapper
+├── trained_models/         # Saved model checkpoints
+├── experiments/            # Training experiment outputs
 └── README.md               # This file
 ```
 
-## Future Improvements
+## 🚀 **Quick Start**
 
-Potential improvements for the learnable scoring function include:
+### 1. **Train the Scoring Function**
 
-1. More complex architectures like transformers for better feature extraction
-2. End-to-end training with the base model
-3. Exploration of different loss functions and regularization techniques
-4. Integration with more diverse input features (e.g., image context) 
+```bash
+cd /ssd_4TB/divake/conformal-od
+
+# Simple training with defaults
+python learnable_scoring_fn/run_training.py
+
+# Or with custom parameters
+python -m learnable_scoring_fn.train_scoring \
+  --config_file cfg_std_rank \
+  --subset_size 50000 \
+  --num_epochs 100 \
+  --target_coverage 0.9 \
+  --device cuda
+```
+
+### 2. **Use Trained Model in Conformal Prediction**
+
+```python
+# In your conformal prediction code
+from calibration.conformal_scores import learned_score
+
+# Use like abs_res(), but with learned scoring
+score = learned_score(gt_coords, pred_coords, pred_scores)
+```
+
+## 🔧 **Training Framework**
+
+The training follows your **classification framework pattern**:
+
+### **Per-Epoch Training Loop**
+
+```python
+for epoch in range(num_epochs):
+    # 1. Calibration Phase: Calculate tau using calibration set
+    tau = calculate_tau_per_class(model, cal_data, alpha=0.1)
+    
+    # 2. Training Phase: Train scoring function with FIXED tau
+    train_loss = train_epoch(model, train_data, tau)
+    
+    # 3. Validation Phase: Evaluate with learned scores + current tau
+    coverage, width = validate_epoch(model, val_data, tau)
+```
+
+### **Key Features**
+
+- ✅ **Per-epoch tau calculation** like your classification approach
+- ✅ **Curriculum learning**: λ_width starts low (focus coverage) → increases (balance coverage/efficiency)  
+- ✅ **Stratified sampling**: 50k samples from top 6 COCO classes
+- ✅ **Hand-crafted features**: coordinates + confidence + 6 geometric features
+- ✅ **Same val/calib splits** as std method for fair comparison
+
+## 📊 **Input Features**
+
+The scoring function uses **13 input features**:
+
+| Feature Type | Features | Description |
+|-------------|----------|-------------|
+| **Coordinates** | x0, y0, x1, y1 | Predicted bounding box coordinates |
+| **Confidence** | pred_score | Model confidence score |
+| **Geometric** | log_area | Log-transformed box area |
+| | aspect_ratio | Width/height ratio |
+| | center_x, center_y | Normalized center coordinates |
+| | rel_pos_x, rel_pos_y | Position relative to image center |
+| | rel_size | Box size relative to image |
+| | edge_distance | Distance to nearest image edge |
+
+## 🏗️ **Model Architecture**
+
+```python
+ScoringMLP(
+    input_dim=13,           # 13 input features
+    hidden_dims=[128, 64, 32],  # 3 hidden layers
+    output_dim=1,           # Single score output
+    dropout_rate=0.2        # Regularization
+)
+```
+
+**Loss Function:**
+```python
+total_loss = coverage_loss + λ_width * width_loss
+```
+
+Where:
+- `coverage_loss = (actual_coverage - target_coverage)²`
+- `width_loss = normalized_interval_width`
+- `λ_width` follows curriculum: 0.01 → 0.1
+
+## 📈 **Training Parameters**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `subset_size` | 50,000 | Training samples from COCO |
+| `num_epochs` | 100 | Training epochs |
+| `batch_size` | 64 | Batch size |
+| `target_coverage` | 0.9 | Target coverage (90%) |
+| `initial_lambda` | 0.01 | Starting width penalty |
+| `final_lambda` | 0.1 | Final width penalty |
+| `warmup_epochs` | 20 | Epochs to keep initial λ |
+| `ramp_epochs` | 30 | Epochs to ramp λ |
+
+## 📂 **Output Files**
+
+After training, you'll find:
+
+```
+experiments/learnable_scoring_default/
+├── best_model.pt           # Best model checkpoint
+├── feature_stats.pt        # Feature normalization stats
+├── training_curves.png     # Loss/coverage/width plots
+├── training_metrics.json   # All training metrics
+├── config.json            # Training configuration
+└── checkpoints/           # Periodic checkpoints
+```
+
+## 🔗 **Integration**
+
+The trained model integrates seamlessly with your existing pipeline:
+
+### **In conformal_scores.py**
+```python
+# Loads trained model automatically
+from calibration.conformal_scores import learned_score
+
+# Use exactly like abs_res()
+learned_scores = learned_score(gt_coords, pred_coords, pred_scores)
+```
+
+### **Fallback Mechanism**
+- If trained model fails to load → automatically falls back to `abs_res()`
+- Ensures your pipeline never breaks
+
+## 🎛️ **Advanced Usage**
+
+### **Custom Training**
+
+```bash
+python -m learnable_scoring_fn.train_scoring \
+  --subset_size 30000 \
+  --num_epochs 50 \
+  --initial_lambda 0.005 \
+  --final_lambda 0.2 \
+  --hidden_dims 256 128 64 \
+  --dropout_rate 0.3
+```
+
+### **Load Custom Model**
+
+```python
+from calibration.conformal_scores import learned_score
+
+# Use specific model path
+score = learned_score(
+    gt_coords, pred_coords, pred_scores,
+    model_path="/path/to/your/model.pt"
+)
+```
+
+### **Batch Processing**
+
+```python
+from calibration.conformal_scores import get_learned_score_batch
+
+# Efficient batch processing
+scores = get_learned_score_batch(gt_batch, pred_batch, score_batch)
+```
+
+## 🐛 **Troubleshooting**
+
+### **Common Issues**
+
+1. **CUDA out of memory**
+   ```bash
+   # Reduce batch size
+   python -m learnable_scoring_fn.train_scoring --batch_size 32
+   ```
+
+2. **Model not found**
+   ```python
+   # Check if model exists
+   from calibration.conformal_scores import is_learned_model_available
+   print(is_learned_model_available())  # Should return True
+   ```
+
+3. **Feature extraction errors**
+   - Ensure `pred_scores` are provided when calling `learned_score()`
+   - Check tensor shapes match expected formats
+
+### **Logging**
+
+Training logs are saved to the experiment directory. Check:
+- `log.txt` for detailed training logs
+- `training_metrics.json` for numerical results
+- `training_curves.png` for visual progress
+
+## 🚦 **What to Expect**
+
+After training, you should see:
+- **Coverage**: Converging to ~90%
+- **Width**: Decreasing over time (more efficient intervals)
+- **Loss**: Generally decreasing with some fluctuation
+
+The trained model will then be automatically used when you call `learned_score()` in your conformal prediction pipeline!
+
+## 🎯 **Next Steps**
+
+1. **Train the model**: Run `python learnable_scoring_fn/run_training.py`
+2. **Compare with std method**: Use same evaluation scripts
+3. **Analyze results**: Check if learned scoring improves coverage/efficiency trade-off
+4. **Iterate**: Adjust hyperparameters based on results 
