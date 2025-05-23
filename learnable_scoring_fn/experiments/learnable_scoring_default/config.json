@@ -1,0 +1,31 @@
+{
+  "config_file": "cfg_std_rank",
+  "config_path": "/ssd_4TB/divake/conformal-od/config/coco_val",
+  "subset_size": 50000,
+  "input_dim": 13,
+  "hidden_dims": [
+    128,
+    64,
+    32
+  ],
+  "dropout_rate": 0.2,
+  "num_epochs": 100,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "weight_decay": 1e-05,
+  "target_coverage": 0.9,
+  "initial_lambda": 0.01,
+  "final_lambda": 0.1,
+  "warmup_epochs": 20,
+  "ramp_epochs": 30,
+  "train_frac": 0.5,
+  "cal_frac": 0.3,
+  "val_frac": 0.2,
+  "output_dir": "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/experiments",
+  "exp_name": "learnable_scoring_default",
+  "load_data": null,
+  "save_data": true,
+  "device": "cuda",
+  "seed": 42,
+  "save_every": 10
+}
