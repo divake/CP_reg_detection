@@ -56,14 +56,14 @@ class FeatureExtractor:
         aspect_ratio = (width / height.clamp(min=1e-6)).unsqueeze(1)  # [N, 1]
         
         # 5. Box center coordinates (normalized by image size)
-        center_x = ((x0 + x1) / 2) / img_widths.unsqueeze(1)  # [N, 1]
-        center_y = ((y0 + y1) / 2) / img_heights.unsqueeze(1)  # [N, 1]
+        center_x = (((x0 + x1) / 2) / img_widths).unsqueeze(1)  # [N, 1]
+        center_y = (((y0 + y1) / 2) / img_heights).unsqueeze(1)  # [N, 1]
         
         # 6. Position relative to image center
         img_center_x = img_widths / 2
         img_center_y = img_heights / 2
-        rel_pos_x = (((x0 + x1) / 2) - img_center_x) / img_widths.unsqueeze(1)  # [N, 1]
-        rel_pos_y = (((y0 + y1) / 2) - img_center_y) / img_heights.unsqueeze(1)  # [N, 1]
+        rel_pos_x = ((((x0 + x1) / 2) - img_center_x) / img_widths).unsqueeze(1)  # [N, 1]
+        rel_pos_y = ((((y0 + y1) / 2) - img_center_y) / img_heights).unsqueeze(1)  # [N, 1]
         
         # 7. Box size relative to image size
         rel_size = (area / (img_heights * img_widths)).unsqueeze(1)  # [N, 1]

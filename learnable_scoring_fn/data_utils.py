@@ -139,9 +139,9 @@ def prepare_training_data(ist_list: List[Dict], img_list: List[List],
         subset_size: Target number of training samples
         
     Returns:
-        all_features: [N, F] tensor of features
         all_gt_coords: [N, 4] tensor of ground truth coordinates  
         all_pred_coords: [N, 4] tensor of predicted coordinates
+        all_pred_scores: [N] tensor of prediction scores
         selected_classes: List of class IDs included in training
     """
     # Analyze class frequencies
