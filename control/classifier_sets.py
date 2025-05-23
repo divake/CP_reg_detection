@@ -214,6 +214,14 @@ class LabelSet:
                 pred_upper[:, i] = ist[self.cqr_upper + self.coord_fields[i % 4]]
             pi = pred_intervals.quant_pi(pred_lower, pred_upper, box_set_quant)
 
+        elif self.risk_control == "learn_conf":
+            # Support for learnable conformal risk control
+            pred = torch.zeros_like(gt)
+            for i, s in enumerate(self.score_fields):
+                gt[:, i] = ist["gt_" + self.coord_fields[i % 4]]
+                pred[:, i] = ist["pred_" + self.coord_fields[i % 4]]
+            pi = pred_intervals.fixed_pi(pred, box_set_quant)
+
         elif self.risk_control == "base_conf":
             pred = torch.zeros_like(gt)
             for i, s in enumerate(self.score_fields):
@@ -362,8 +370,13 @@ class ClassThresholdSet(LabelSet):
     """
 
     def score(self, pred_score_all: torch.Tensor, gt_class):
-        # 1 - class probability of ground truth class
-        return 1 - pred_score_all[:, gt_class]
+        # Check if pred_score_all is 1D or 2D
+        if pred_score_all.dim() == 1:
+            # If 1D, it's a single score per instance, so return 1 - pred_score_all
+            return 1 - pred_score_all
+        else:
+            # If 2D, it's class probabilities, so return 1 - class probability of ground truth class
+            return 1 - pred_score_all[:, gt_class]
 
     def get_pred_set(self, pred_score_all: torch.Tensor, q=None):
         label_q = self.label_q if q is None else q

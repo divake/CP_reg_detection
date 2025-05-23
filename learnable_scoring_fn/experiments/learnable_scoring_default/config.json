@@ -1,8 +1,8 @@
 {
   "config_file": "cfg_std_rank",
   "config_path": "/ssd_4TB/divake/conformal-od/config/coco_val",
-  "load_predictions": null,
-  "save_predictions": true,
+  "load_predictions": "auto",
+  "save_predictions": false,
   "predictions_cache_dir": null,
   "subset_size": 50000,
   "train_frac": 0.5,

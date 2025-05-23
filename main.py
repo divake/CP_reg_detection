@@ -12,7 +12,7 @@ from detectron2.data import MetadataCatalog, get_detection_dataset_dicts
 from util import util, io_file
 from data import data_loader
 from model import model_loader
-from control import std_conformal, ens_conformal, cqr_conformal, baseline_conformal
+from control import std_conformal, ens_conformal, cqr_conformal, baseline_conformal, learn_conformal
 from model.qr_head import QuantileROIHead
 
 # Add BooleanOptionalAction for Python 3.8 compatibility
@@ -82,7 +82,7 @@ def create_parser():
         type=str,
         default=None,
         required=True,
-        choices=["std_conf", "ens_conf", "cqr_conf", "base_conf"],
+        choices=["std_conf", "ens_conf", "cqr_conf", "base_conf", "learn_conf"],
         help="Type of risk control/conformal approach to use.",
     )
     parser.add_argument(
@@ -263,6 +263,10 @@ def main():
         )
     elif args.risk_control == "base_conf":
         controller = baseline_conformal.BaselineConformal(
+            cfg, args, nr_class, filedir, log=wandb_run, logger=logger
+        )
+    elif args.risk_control == "learn_conf":
+        controller = learn_conformal.LearnConformal(
             cfg, args, nr_class, filedir, log=wandb_run, logger=logger
         )
     else:
