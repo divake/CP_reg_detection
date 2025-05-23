@@ -115,6 +115,9 @@ class DataCollector:
         pred_score_all: Tensor,
         pred_logits_all: Tensor,
     ):
+        # Ensure all tensors are on the same device
+        device = gt_box.tensor.device
+        
         # Boxes coord come as BoxMode.XYXY_ABS: (x0, y0, x1, y1)
         self.ist_list[c]["gt_x0"] += gt_box[idx].tensor[:, 0].tolist()
         self.ist_list[c]["gt_y0"] += gt_box[idx].tensor[:, 1].tolist()
@@ -137,13 +140,20 @@ class DataCollector:
         if pred_logits_all is not None:
             self.ist_list[c]["pred_logits_all"] += pred_logits_all[idx].tolist()
 
+        # Ensure boxes are on the same device before computing IoU
+        gt_boxes_idx = gt_box[idx]
+        pred_boxes_idx = pred_box[idx]
+        
         self.ist_list[c]["iou"] += matched_pairwise_iou(
-            gt_box[idx], pred_box[idx]
+            gt_boxes_idx, pred_boxes_idx
         ).tolist()
+        
         self.ist_list[c]["img_id"] += [img_id for _ in range(len(idx))]
         if self.label_set_generator is not None:
+            # Use pred_score if pred_score_all is None
+            scores_to_use = pred_score_all if pred_score_all is not None else pred_score
             self.ist_list[c]["label_score"] += self.label_set_generator.score(
-                pred_score_all[idx], c
+                scores_to_use[idx], c
             ).tolist()
 
     def to_file(self, filename: str, filedir: str, **kwargs):

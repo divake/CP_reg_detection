@@ -95,7 +95,7 @@ def load_trained_scoring_model(model_path: str = None):
 
 
 def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor = None, 
-                 model_path: str = None, fallback_to_abs: bool = True):
+                 model_path: str = None, fallback_to_abs: bool = False):
     """
     Learnable scoring function - uses trained model to compute nonconformity scores.
     
@@ -107,74 +107,82 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         pred: Predicted coordinates [N] or [N, 4] 
         pred_score: Prediction confidence scores [N] (required for learned scoring)
         model_path: Path to trained model (optional, uses default if None)
-        fallback_to_abs: If True, fall back to abs_res if model loading fails
+        fallback_to_abs: Deprecated - no longer used
         
     Returns:
         scores: Learned nonconformity scores [N] or [N, 4]
     """
     # Handle missing prediction scores
     if pred_score is None:
-        if fallback_to_abs:
-            print("Warning: pred_score not provided for learned_score, falling back to abs_res")
-            return abs_res(gt, pred)
-        else:
-            raise ValueError("pred_score is required for learned scoring function")
+        raise ValueError("pred_score is required for learned scoring function")
     
     # Load trained model
     model, feature_extractor = load_trained_scoring_model(model_path)
     
     if model is None or feature_extractor is None:
-        if fallback_to_abs:
-            print("Warning: Failed to load trained model, falling back to abs_res")
-            return abs_res(gt, pred)
-        else:
-            raise RuntimeError("Failed to load trained scoring model")
+        raise RuntimeError("Failed to load trained scoring model")
     
     device = next(model.parameters()).device
     
-    try:
-        # Ensure tensors are properly shaped
-        if pred.dim() == 1:
-            # Single coordinate case - expand to [1, 1] then [1, 4]
-            pred_coords = pred.unsqueeze(0).unsqueeze(0).expand(-1, 4)
+    # Ensure tensors are properly shaped
+    if pred.dim() == 1:
+        # Single coordinate case - reshape to [N, 4] where N=1
+        if len(pred) == 1:
+            # Single scalar coordinate - create [1, 4] by repeating
+            pred_coords = pred.repeat(4).unsqueeze(0)  # [1, 4]
             pred_scores = pred_score.unsqueeze(0) if pred_score.dim() == 0 else pred_score[:1]
             single_coord = True
-        elif pred.dim() == 2 and pred.shape[1] == 4:
-            # Multi-coordinate case [N, 4]
-            pred_coords = pred
-            pred_scores = pred_score
+        else:
+            # Multiple coordinates in 1D - reshape as [N, 1] then expand
+            n_coords = len(pred)
+            pred_coords = pred.unsqueeze(1).expand(-1, 4)  # [N, 4]
+            pred_scores = pred_score[:n_coords] if len(pred_score) >= n_coords else pred_score.repeat(n_coords)
             single_coord = False
-        else:
-            raise ValueError(f"Unexpected pred shape: {pred.shape}")
-        
-        # Move to device
-        pred_coords = pred_coords.to(device)
-        pred_scores = pred_scores.to(device)
-        
-        # Extract features
-        features = feature_extractor.extract_features(pred_coords, pred_scores)
-        
-        # Normalize features
-        normalized_features = feature_extractor.normalize_features(features)
-        
-        # Get learned scores
-        with torch.no_grad():
-            learned_scores = model(normalized_features).squeeze()  # [N]
-        
-        # Handle different return cases
-        if single_coord:
-            # Return single score
-            return learned_scores.item() if learned_scores.dim() == 0 else learned_scores[0].item()
-        else:
-            # Return scores for all samples
-            return learned_scores.cpu()
+    elif pred.dim() == 2 and pred.shape[1] == 4:
+        # Multi-coordinate case [N, 4] - already correct shape
+        pred_coords = pred
+        pred_scores = pred_score
+        single_coord = False
+    else:
+        raise ValueError(f"Unexpected pred shape: {pred.shape}. Expected 1D tensor or [N, 4] tensor")
     
-    except Exception as e:
-        if fallback_to_abs:
-            print(f"Error in learned scoring: {e}, falling back to abs_res")
-            return abs_res(gt, pred)
-        else:
-            raise RuntimeError(f"Error in learned scoring: {e}")
+    # Move to device
+    pred_coords = pred_coords.to(device)
+    pred_scores = pred_scores.to(device)
+    
+    # Extract features
+    features = feature_extractor.extract_features(pred_coords, pred_scores)
+    
+    # Normalize features
+    normalized_features = feature_extractor.normalize_features(features)
+    
+    # Get learned scores
+    with torch.no_grad():
+        learned_scores = model(normalized_features).squeeze()  # [N]
+    
+    # Handle different return cases
+    if single_coord:
+        # Return single score
+        return learned_scores.item() if learned_scores.dim() == 0 else learned_scores[0].item()
+    else:
+        # Return scores for all samples - compute absolute residual and scale by learned score
+        gt_tensor = gt.to(device)
+        if gt_tensor.dim() == 1:
+            if len(gt_tensor) == 1:
+                gt_tensor = gt_tensor.repeat(4).unsqueeze(0)  # [1, 4]
+            else:
+                gt_tensor = gt_tensor.unsqueeze(1).expand(-1, 4)  # [N, 4]
+        
+        # Compute absolute errors
+        abs_errors = torch.abs(gt_tensor - pred_coords)  # [N, 4]
+        
+        # Scale by learned scores (broadcast learned scores to match coordinates)
+        if learned_scores.dim() == 0:
+            learned_scores = learned_scores.unsqueeze(0)
+        scaled_scores = abs_errors / (learned_scores.unsqueeze(1).expand(-1, 4) + 1e-6)
+        
+        # Return mean across coordinates for each sample
+        return scaled_scores.mean(dim=1).cpu()
 
 
 def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor, 
@@ -195,14 +203,14 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
     model, feature_extractor = load_trained_scoring_model(model_path)
     
     if model is None or feature_extractor is None:
-        print("Warning: Failed to load trained model, falling back to abs_res")
-        return torch.abs(gt_batch - pred_batch).mean(dim=1)  # Average across coordinates
+        raise RuntimeError("Failed to load trained scoring model for batch processing")
     
     device = next(model.parameters()).device
     
     # Move to device
     pred_batch = pred_batch.to(device)
     pred_score_batch = pred_score_batch.to(device)
+    gt_batch = gt_batch.to(device)
     
     # Extract and normalize features
     features = feature_extractor.extract_features(pred_batch, pred_score_batch)
@@ -212,7 +220,12 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
     with torch.no_grad():
         learned_scores = model(normalized_features).squeeze()  # [N]
     
-    return learned_scores.cpu()
+    # Compute scaled nonconformity scores
+    abs_errors = torch.abs(gt_batch - pred_batch)  # [N, 4]
+    scaled_scores = abs_errors / (learned_scores.unsqueeze(1).expand(-1, 4) + 1e-6)
+    
+    # Return mean across coordinates
+    return scaled_scores.mean(dim=1).cpu()
 
 
 # Convenience function for integration with existing code
@@ -230,8 +243,7 @@ def get_available_scoring_functions():
 
 def is_learned_model_available(model_path: str = None):
     """Check if trained model is available and loadable."""
-    try:
-        model, feature_extractor = load_trained_scoring_model(model_path)
-        return model is not None and feature_extractor is not None
-    except:
-        return False
+    model, feature_extractor = load_trained_scoring_model(model_path)
+    if model is None or feature_extractor is None:
+        raise RuntimeError(f"Trained scoring model not available at path: {model_path}")
+    return True
