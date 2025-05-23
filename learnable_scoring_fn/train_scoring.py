@@ -63,7 +63,7 @@ def create_parser():
     # Training parameters
     parser.add_argument('--num_epochs', type=int, default=50, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     
     # Coverage loss parameters
@@ -96,7 +96,7 @@ def create_parser():
 
 def calculate_tau_per_class(scoring_model: ScoringMLP, cal_data: dict, 
                            feature_extractor: FeatureExtractor,
-                           alpha: float = 0.1, device: torch.device = None) -> torch.Tensor:
+                           alpha: float = 0.1, device: torch.device = None, logger=None) -> torch.Tensor:
     """
     Calculate tau (quantile threshold) per class using calibration data.
     
@@ -118,15 +118,47 @@ def calculate_tau_per_class(scoring_model: ScoringMLP, cal_data: dict,
     with torch.no_grad():
         # Extract features and get scores
         cal_features = feature_extractor.normalize_features(cal_data['features'].to(device))
+        
+        # Debug: Check dimensions before passing to model
+        if logger is not None:
+            logger.info(f"Cal features shape before normalization: {cal_data['features'].shape}")
+            logger.info(f"Cal features shape after normalization: {cal_features.shape}")
+        
+        # Safety check for dimensions before model forward pass
+        expected_input_dim = scoring_model.input_dim
+        actual_input_dim = cal_features.shape[1]
+        if actual_input_dim != expected_input_dim:
+            error_msg = f"Feature dimension mismatch: model expects {expected_input_dim} but got {actual_input_dim}. "
+            error_msg += "This suggests corrupted cached data or incorrect feature extraction. "
+            error_msg += "Try deleting cached data and re-running."
+            if logger is not None:
+                logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        
         cal_scores = scoring_model(cal_features).squeeze()  # [N]
+        
+        # Debug: Check scoring model outputs
+        if logger is not None:
+            logger.info(f"Scoring model outputs - min: {cal_scores.min().item():.6f}, max: {cal_scores.max().item():.6f}, mean: {cal_scores.mean().item():.6f}")
         
         # Calculate absolute errors between GT and predictions
         cal_abs_errors = torch.abs(cal_data['gt_coords'] - cal_data['pred_coords']).to(device)  # [N, 4]
         
+        # Debug: Check absolute errors
+        if logger is not None:
+            logger.info(f"Cal absolute errors - min: {cal_abs_errors.min().item():.6f}, max: {cal_abs_errors.max().item():.6f}, mean: {cal_abs_errors.mean().item():.6f}")
+        
         # Calculate nonconformity scores: error / learned_score for each coordinate
         # Broadcast cal_scores to match coordinate dimensions
         cal_scores_broadcast = cal_scores.unsqueeze(1).expand(-1, 4)  # [N, 4]
-        nonconf_scores = cal_abs_errors / (cal_scores_broadcast + 1e-8)  # [N, 4]
+        
+        # Add larger epsilon to prevent division by very small numbers
+        epsilon = 1e-3  # Increased from 1e-8
+        nonconf_scores = cal_abs_errors / (cal_scores_broadcast + epsilon)  # [N, 4]
+        
+        # Debug: Check nonconformity scores
+        if logger is not None:
+            logger.info(f"Nonconformity scores - min: {nonconf_scores.min().item():.6f}, max: {nonconf_scores.max().item():.6f}, mean: {nonconf_scores.mean().item():.6f}")
         
         # Calculate quantile (tau) for each coordinate
         quantile_level = 1 - alpha
@@ -179,6 +211,9 @@ def train_epoch(scoring_model: ScoringMLP, optimizer: torch.optim.Optimizer,
         optimizer.zero_grad()
         learned_scores = scoring_model(batch_features).squeeze()  # [batch_size]
         
+        # Add regularization to prevent very small scores
+        score_penalty = torch.mean(torch.relu(1.0 - learned_scores))  # Penalty for scores < 1.0
+        
         # Create prediction intervals using learned scores and fixed tau
         learned_scores_broadcast = learned_scores.unsqueeze(1).expand(-1, 4)  # [batch_size, 4]
         tau_broadcast = tau.unsqueeze(0).expand(batch_features.shape[0], -1)  # [batch_size, 4]
@@ -188,10 +223,12 @@ def train_epoch(scoring_model: ScoringMLP, optimizer: torch.optim.Optimizer,
         pred_upper = batch_pred + interval_widths
         
         # Calculate loss
-        loss = criterion(pred_lower, pred_upper, batch_gt)
+        coverage_loss = criterion(pred_lower, pred_upper, batch_gt)
+        loss = coverage_loss + 0.1 * score_penalty  # Add regularization
         
         # Backward pass
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(scoring_model.parameters(), max_norm=1.0)
         optimizer.step()
         
         total_loss += loss.item()
@@ -399,6 +436,18 @@ def main():
         feature_extractor = FeatureExtractor()
         features = feature_extractor.extract_features(pred_coords, pred_scores)
         
+        # Debug: Check feature dimensions
+        logger.info(f"Extracted features shape: {features.shape}")
+        logger.info(f"Expected feature dimensions: 13")
+        
+        # Safety check: Ensure features have correct dimensions
+        if features.shape[1] != 13:
+            error_msg = f"Feature extraction produced {features.shape[1]} dimensions, expected 13. "
+            error_msg += "This suggests an issue with the FeatureExtractor. "
+            error_msg += f"Feature shape: {features.shape}, pred_coords shape: {pred_coords.shape}, pred_scores shape: {pred_scores.shape}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Fit normalizer on all features
         feature_extractor.fit_normalizer(features)
         
@@ -415,6 +464,20 @@ def main():
         # Save data if requested
         if args.save_data:
             data_path = os.path.join(exp_dir, 'training_data.pt')
+            
+            # Check if data already exists and validate it
+            if os.path.exists(data_path):
+                try:
+                    existing_data = torch.load(data_path)
+                    existing_features = existing_data.get('train_data', {}).get('features')
+                    if existing_features is not None and existing_features.shape[1] != 13:
+                        logger.warning(f"Existing cached data has wrong feature dimensions ({existing_features.shape[1]}), removing it...")
+                        os.remove(data_path)
+                except Exception as e:
+                    logger.warning(f"Could not load existing data file, will overwrite: {e}")
+                    if os.path.exists(data_path):
+                        os.remove(data_path)
+            
             torch.save({
                 'train_data': train_data,
                 'cal_data': cal_data,
@@ -436,6 +499,9 @@ def main():
     scoring_model = ScoringMLP(**model_config).to(device)
     optimizer = optim.Adam(scoring_model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     
+    # Add gradient clipping
+    max_grad_norm = 1.0
+    
     # Initialize loss and scheduler
     lambda_scheduler = AdaptiveLambdaScheduler(
         args.initial_lambda, args.final_lambda, args.warmup_epochs, args.ramp_epochs
@@ -456,8 +522,13 @@ def main():
         logger.info(f"\nEpoch {epoch + 1}/{args.num_epochs}")
         
         # 1. Calibration phase: Calculate tau using calibration set
-        tau = calculate_tau_per_class(scoring_model, cal_data, feature_extractor, alpha=0.1, device=device)
+        tau = calculate_tau_per_class(scoring_model, cal_data, feature_extractor, alpha=0.1, device=device, logger=logger)
         logger.info(f"Calculated tau: {tau.cpu().numpy()}")
+        
+        # Safety check: stop training if tau values become too large
+        if torch.any(tau > 1000):
+            logger.warning(f"Tau values too large: {tau.cpu().numpy()}, stopping training early")
+            break
         
         # 2. Training phase: Train with fixed tau
         current_lambda = lambda_scheduler.get_lambda(epoch)

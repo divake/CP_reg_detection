@@ -37,9 +37,8 @@ class ScoringMLP(nn.Module):
             layers.append(nn.Dropout(dropout_rate))
             prev_dim = hidden_dim
         
-        # Output layer with Softplus to ensure positive scores
+        # Output layer - just linear, no activation
         layers.append(nn.Linear(prev_dim, output_dim))
-        layers.append(nn.Softplus())  # Ensures positive nonconformity scores
         
         self.network = nn.Sequential(*layers)
         
@@ -52,6 +51,12 @@ class ScoringMLP(nn.Module):
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 nn.init.constant_(m.bias, 0)
+        
+        # Initialize the final layer to output around 1.0
+        final_layer = list(self.modules())[-1]
+        if isinstance(final_layer, nn.Linear):
+            nn.init.constant_(final_layer.bias, 1.0)
+            nn.init.normal_(final_layer.weight, mean=0, std=0.1)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -66,9 +71,12 @@ class ScoringMLP(nn.Module):
         
         Returns:
             scores: Tensor of shape [batch_size, 1]
-                   Learned nonconformity scores
+                   Learned nonconformity scores (always positive)
         """
-        return self.network(x)
+        raw_output = self.network(x)
+        # Use exponential to ensure positive outputs, but clamp to prevent extreme values
+        output = torch.exp(raw_output)
+        return torch.clamp(output, min=0.1, max=10.0)
     
     def get_model_info(self) -> dict:
         """Return model configuration information."""
