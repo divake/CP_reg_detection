@@ -183,3 +183,6 @@ config.json
 training_metrics.json
 training_curves.png
 learnable_scoring_fn/experiments/learnable_scoring_default/config.json
+plots/
+domain_shift_analysis.png
+learnable_scoring_fn/experiments/sophisticated_scoring_cfg_std_rank/training_curves_comprehensive.png
