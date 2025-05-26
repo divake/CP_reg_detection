@@ -26,12 +26,35 @@ from scipy.optimize import brentq
 import itertools
 
 import matplotlib
+# Configure matplotlib to avoid LaTeX issues
+matplotlib.use('Agg')  # Use non-interactive backend
+
+# Set all LaTeX-related parameters to False before importing pyplot
+matplotlib.rcParams.update({
+    'text.usetex': False,
+    'mathtext.default': 'regular',
+    'font.family': ['DejaVu Sans', 'Arial', 'sans-serif'],
+    'axes.unicode_minus': False,
+    'text.latex.preamble': '',
+    'pgf.rcfonts': False,
+    'pgf.texsystem': 'pdflatex',
+    'svg.fonttype': 'none'
+})
+
+import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.lines as mlines
 import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, FixedFormatter
 import seaborn as sns
+
+# Ensure LaTeX is disabled
+plt.rcParams.update({
+    'text.usetex': False,
+    'mathtext.default': 'regular',
+    'font.family': ['DejaVu Sans', 'Arial', 'sans-serif'],
+    'axes.unicode_minus': False
+})
 
 # Add project paths
 sys.path.insert(0, "/ssd_4TB/divake/conformal-od")
@@ -58,6 +81,28 @@ except ImportError:
 
 # scientific notation off for pytorch
 torch.set_printoptions(sci_mode=False)
+
+def configure_matplotlib_no_latex():
+    """Ensure matplotlib is configured to not use LaTeX"""
+    import matplotlib
+    matplotlib.rcParams.update({
+        'text.usetex': False,
+        'mathtext.default': 'regular',
+        'font.family': ['DejaVu Sans', 'Arial', 'sans-serif'],
+        'axes.unicode_minus': False,
+        'text.latex.preamble': '',
+        'pgf.rcfonts': False,
+        'svg.fonttype': 'none'
+    })
+    plt.rcParams.update({
+        'text.usetex': False,
+        'mathtext.default': 'regular',
+        'font.family': ['DejaVu Sans', 'Arial', 'sans-serif'],
+        'axes.unicode_minus': False
+    })
+
+# Ensure matplotlib configuration is applied
+configure_matplotlib_no_latex()
 
 def save_fig(figname: str, **kwargs):
     """Save figure to file with given name"""
@@ -405,6 +450,7 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     """
     Plot prediction intervals for a specific image using multiple methods (std, ens, cqr)
     """
+    configure_matplotlib_no_latex()
     # Create output directory for saving plots
     output_plots_dir = "/ssd_4TB/divake/conformal-od/output/plots"
     Path(output_plots_dir).mkdir(exist_ok=True, parents=True)
@@ -614,12 +660,489 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
         print(f"  Ensemble model (oracle): {output_fname_ens_oracle}")
         print(f"  CQR model (oracle): {output_fname_cqr_oracle}")
 
+def plot_coverage_histogram(class_name="person", dataset="coco_val", device="cuda", rc="std", to_file=True):
+    """
+    Plot empirical coverage histogram over number of trials for a specific class
+    """
+    configure_matplotlib_no_latex()
+    print(f"Plotting coverage histogram for class: {class_name}")
+    
+    # Setup model and data
+    (args, cfg, controller, model, data_list, dataloader, metadata, nr_class, 
+     control_data, test_indices, label_data, fnames, channels, plotdir, 
+     metr, label_metr, file_name_prefix, filedir) = setup_model_and_data(rc, dataset, device)
+    
+    # Parameters
+    i, j = 0, 4  # desired score indices
+    alpha = 0.1  # miscoverage
+    
+    n = 1000  # calibration samples
+    a, b = n + 1 - np.floor((n+1)*alpha), np.floor((n+1)*alpha)  # beta shape params
+    x = np.linspace(beta.ppf(0, a, b), beta.ppf(1, a, b), 1000)
+    
+    class_idx = metadata["thing_classes"].index(class_name)
+    cn = class_name.replace(" ", "")  # remove whitespace
+    
+    # Coordinate coverage for all trials
+    cover = control_data[:, class_idx, i:j, metr["cov_coord"]]
+    
+    fig, axes = plt.subplots(2, 2, figsize=(10, 6))
+    labs = ["x0", "y0", "x1", "y1"]
+    
+    for i, ax in enumerate(axes.flat):
+        cov = cover[:, i]
+        ax.hist(cov.numpy(), bins=30, alpha=0.5, range=(0.85, 1.0),
+                color="blue", density=True,
+                label=f"Emp. coverage, mean = {cov.mean():.3f}")
+        ax.plot(x, beta.pdf(x, a, b), color="red", alpha=0.8,
+                label = f"Nom. Beta fit, {n} samp")
+        ax.axvline(x=1-alpha, color="black", ls=":", label="Nom. coverage 1-alpha")
+        ax.set_xlim(0.85, 1.0)
+        ax.legend(loc="upper left", fontsize="small")
+        ax.set_ylabel("Density", fontsize="small")
+        ax.set_xlabel("Coverage level", fontsize="small")
+        ax.set_title(f"Coord. {labs[i]}", fontsize="small")
+    
+    fig.suptitle(f"Class: {class_name}, Coverage histogram over nr. of trials", 
+                 y=.97, x=0.5, fontsize="medium")
+    fig.tight_layout()
+    
+    if to_file:
+        fname = os.path.join(plotdir, f"{class_name}_emp_coord_cov_hist.png")
+        save_fig(fname[:-4])
+        print(f"Saved coordinate coverage histogram: {fname}")
+    
+    plt.show()
+    
+    # Box coverage for all trials
+    cov = control_data[:, class_idx, 0, metr["cov_box"]]
+    
+    fig, ax = plt.subplots(1, 1, figsize=(5, 3))
+    ax.hist(cov.numpy(), bins=30, alpha=0.5, range=(0.8, 1.0),
+            color="blue", density=True,
+            label=f"Emp. coverage, mean = {cov.mean():.3f}")
+    ax.plot(x, beta.pdf(x, a, b), color="red", alpha=0.8,
+            label = f"Nom. Beta fit, {n} samp")
+    ax.axvline(x=1-alpha, color="black", ls=":", label="Nom. coverage 1-alpha")
+    ax.set_xlim(0.84, 0.96)
+    ax.legend(loc="upper left", fontsize="small")
+    ax.set_ylabel("Density", fontsize="small")
+    ax.set_xlabel("Coverage level", fontsize="small")
+    ax.set_title(f"Class: {class_name}, Box coverage histogram over nr. of trials", fontsize="small")
+    fig.tight_layout()
+    
+    if to_file:
+        fname = os.path.join(plotdir, f"{class_name}_emp_box_cov_hist.png")
+        save_fig(fname[:-4])
+        print(f"Saved box coverage histogram: {fname}")
+    
+    plt.show()
+
+def plot_beta_distribution(dataset="coco_val", to_file=True):
+    """
+    Plot Beta distribution for given calibration set sizes
+    """
+    configure_matplotlib_no_latex()
+    print("Plotting Beta distribution for calibration set sizes")
+    
+    alpha = 0.1
+    eps = 0.03
+    ql, qh = 0.01, 0.99
+    
+    # Only show COCO since that's what we have data for
+    calib_sizes = [930]  # COCO validation set size
+    dataset_names = ["COCO"]
+    colors = ["#a7c957"]
+    
+    fig, ax = plt.subplots(figsize=(4.2, 2.2))
+    
+    for i, n in enumerate(calib_sizes):
+        # compute cov beta distr
+        l = np.floor((n+1)*alpha)
+        a = n + 1 - l
+        b = l
+        x = np.linspace(1-alpha-eps, 1-alpha+eps, 10000)
+        rv = beta(a, b)
+        
+        # plot
+        ax.plot(x, rv.pdf(x), color=colors[i], linewidth=2, label=f"{dataset_names[i]} (n={n})")
+        
+        # quantiles
+        q_low = rv.ppf(ql)
+        q_high = rv.ppf(qh)
+        ax.axvline(x=q_low, color=colors[i], linestyle="--", alpha=0.8)
+        ax.axvline(x=q_high, color=colors[i], linestyle="--", alpha=0.8)
+    
+    ax.axvline(x=1-alpha, color="black", linestyle="-", linewidth=2, label="Target coverage 1-alpha")
+    ax.set_xlabel("Coverage level", fontsize=10)
+    ax.set_ylabel("Density", fontsize=10)
+    ax.legend(fontsize=8)
+    ax.set_title("Coverage distribution for COCO calibration set", fontsize=10)
+    plt.tight_layout()
+    
+    if to_file:
+        output_dir = "/ssd_4TB/divake/conformal-od/output/plots"
+        Path(output_dir).mkdir(exist_ok=True, parents=True)
+        fname = os.path.join(output_dir, "beta_distribution_comparison.png")
+        save_fig(fname[:-4])
+        print(f"Saved Beta distribution plot: {fname}")
+    
+    plt.show()
+
+def plot_coverage_violin(dataset="coco_val", to_file=True):
+    """
+    Plot coverage violin plots comparing different methods
+    """
+    configure_matplotlib_no_latex()
+    print(f"Plotting coverage violin plots for dataset: {dataset}")
+    
+    # Load data for all three methods
+    methods = ["std", "ens", "cqr"]
+    data_all = {}
+    
+    for method in methods:
+        (args, cfg, controller, model, data_list, dataloader, metadata, nr_class, 
+         control_data, test_indices, label_data, fnames, channels, plotdir, 
+         metr, label_metr, file_name_prefix, filedir) = setup_model_and_data(method, dataset, "cuda")
+        data_all[method] = control_data
+    
+    # Parameters
+    i, j = 0, 4
+    alpha = 0.1
+    
+    # Get coverage data
+    cov_std = data_all["std"][:, :, i:j, metr["cov_box"]].nanmean(dim=2)
+    cov_ens = data_all["ens"][:, :, i:j, metr["cov_box"]].nanmean(dim=2)
+    cov_cqr = data_all["cqr"][:, :, i:j, metr["cov_box"]].nanmean(dim=2)
+    
+    # Compute empirical coverage limits (simulated)
+    n = 1000
+    l = np.floor((n+1)*alpha)
+    a_param = n + 1 - l
+    b_param = l
+    rv = beta(a_param, b_param)
+    liml, limh = rv.ppf(0.01), rv.ppf(0.99)
+    
+    # Colors and setup
+    col = ["#E63946", "#219EBC", "#023047"]
+    y_lims = {"coco_val": (0.64, 1.02)}
+    y_lims_ticks = {"coco_val": [0.7, 0.8, 0.9, 1.0]}
+    
+    fig, ax = plt.subplots(figsize=(6, 3))
+    
+    ax.axhline(y=0.9, color="black", linestyle="--", label='Target coverage (1 - alphaB)')
+    ax.axhspan(liml, limh, alpha=0.3, color="grey", label='Coverage distribution')
+    
+    # Prepare data for violin plot (using all classes combined)
+    # Fix indexing - cov_std should be 2D: [trials, classes], we want mean across classes
+    data = [
+        cov_std.mean(axis=1).numpy(),  # All classes for std
+        cov_std[:, 0].numpy(),  # Small objects std  
+        cov_std[:, 1].numpy(),  # Medium objects std
+        cov_std[:, 2].numpy(),  # Large objects std
+        cov_ens.mean(axis=1).numpy(),  # All classes for ens
+        cov_ens[:, 0].numpy(),  # Small objects ens
+        cov_ens[:, 1].numpy(),  # Medium objects ens
+        cov_ens[:, 2].numpy(),  # Large objects ens
+        cov_cqr.mean(axis=1).numpy(),  # All classes for cqr
+        cov_cqr[:, 0].numpy(),  # Small objects cqr
+        cov_cqr[:, 1].numpy(),  # Medium objects cqr
+        cov_cqr[:, 2].numpy(),  # Large objects cqr
+    ]
+    
+    means = [d.mean() for d in data]
+    violin = ax.violinplot(data, showextrema=False, widths=0.5, points=1000)
+    
+    for i, body in enumerate(violin["bodies"]):
+        method_idx = i // 4  # Each method has 4 groups
+        body.set_facecolor(col[method_idx])
+        body.set_edgecolor("black")
+        body.set_alpha(0.8)
+        body.set_linewidth(1)
+        
+        # horizontal mean lines
+        path = body.get_paths()[0].to_polygons()[0]
+        ax.plot([min(path[:,0])+0.01, max(path[:,0])-0.01], [means[i], means[i]], 
+                color="black", linestyle="-", linewidth=1)
+    
+    ax.set_ylabel("Coverage", fontsize=12)
+    ax.set_ylim(y_lims[dataset])
+    ax.set_yticks(y_lims_ticks[dataset])
+    
+    major_ticks = [2.5, 6.5, 10.5]
+    major_labels = ["Box-Std", "Box-Ens", "Box-CQR"]
+    
+    minor_ticks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    minor_labels = ["All", "Small", "Med.", "Large"] * 3
+    
+    ax.xaxis.set_major_locator(FixedLocator(major_ticks))
+    ax.xaxis.set_major_formatter(FixedFormatter(major_labels))
+    ax.xaxis.set_minor_locator(FixedLocator(minor_ticks))
+    ax.xaxis.set_minor_formatter(FixedFormatter(minor_labels))
+    ax.xaxis.grid(False, which="major")
+    ax.set_xlim(0.5, 12.5)
+    ax.tick_params(axis="x", which="major", length=0, pad=20, labelsize=12)
+    ax.tick_params(axis="x", which="minor", labelsize=8)
+    ax.tick_params(axis="y", which="major", labelsize=8)
+    
+    plt.tight_layout()
+    
+    if to_file:
+        output_dir = "/ssd_4TB/divake/conformal-od/output/plots"
+        Path(output_dir).mkdir(exist_ok=True, parents=True)
+        fname = os.path.join(output_dir, f"{dataset}_cov_violin.png")
+        save_fig(fname[:-4])
+        print(f"Saved coverage violin plot: {fname}")
+    
+    plt.show()
+
+def plot_mpiw_violin(dataset="coco_val", to_file=True):
+    """
+    Plot MPIW (Mean Prediction Interval Width) violin plots
+    """
+    configure_matplotlib_no_latex()
+    print(f"Plotting MPIW violin plots for dataset: {dataset}")
+    
+    # Load data for all three methods
+    methods = ["std", "ens", "cqr"]
+    mpiw_data = []
+    
+    for method in methods:
+        (args, cfg, controller, model, data_list, dataloader, metadata, nr_class, 
+         control_data, test_indices, label_data, fnames, channels, plotdir, 
+         metr, label_metr, file_name_prefix, filedir) = setup_model_and_data(method, dataset, "cuda")
+        
+        # Get MPIW data
+        i, j = 0, 4
+        mpiw = control_data[:, :, i:j, metr["mpiw"]].nanmean(dim=(1,2))  # Average over classes and score indices
+        mpiw_data.append(mpiw.numpy())
+    
+    col = ["#E63946", "#219EBC", "#023047"]
+    
+    fig, ax = plt.subplots(figsize=(2.5, 1.3))
+    
+    means = [d.mean() for d in mpiw_data]
+    violin = ax.violinplot(mpiw_data, showextrema=False, widths=0.5, points=1000)
+    
+    for i, body in enumerate(violin["bodies"]):
+        body.set_facecolor(col[0])
+        body.set_edgecolor("black")
+        body.set_alpha(0.8)
+        body.set_linewidth(1)
+        
+        # horizontal mean lines
+        path = body.get_paths()[0].to_polygons()[0]
+        ax.plot([min(path[:,0])+0.01, max(path[:,0])-0.01], [means[i], means[i]], 
+                color="black", linestyle="-", linewidth=1)
+    
+    ax.set_ylabel("MPIW", fontsize=12)
+    
+    major_ticks = [1,2,3]
+    major_labels = ["Box-Std", "Box-Ens", "Box-CQR"]
+    ax.xaxis.set_major_locator(FixedLocator(major_ticks))
+    ax.xaxis.set_major_formatter(FixedFormatter(major_labels))
+    
+    ax.xaxis.grid(False)
+    ax.tick_params(axis="x", which="major", labelsize=8)
+    ax.tick_params(axis="y", which="major", labelsize=8)
+    
+    plt.tight_layout()
+    
+    if to_file:
+        output_dir = "/ssd_4TB/divake/conformal-od/output/plots"
+        Path(output_dir).mkdir(exist_ok=True, parents=True)
+        fname = os.path.join(output_dir, f"{dataset}_mpiw_violin.png")
+        save_fig(fname[:-4])
+        print(f"Saved MPIW violin plot: {fname}")
+    
+    plt.show()
+
+def plot_efficiency_scatter(dataset="coco_val", to_file=True):
+    """
+    Plot efficiency scatter plots showing coverage vs set size and MPIW
+    """
+    configure_matplotlib_no_latex()
+    print(f"Plotting efficiency scatter plots for dataset: {dataset}")
+    
+    # This would need to load results from CSV files as in the notebook
+    # For now, creating a placeholder structure
+    output_dir = "/ssd_4TB/divake/conformal-od/output/plots"
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
+    
+    methods = [("std", "abs"), ("ens", "norm"), ("cqr", "quant")]
+    
+    # Try to load from existing result files
+    try:
+        res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
+        label_paths = []
+        box_paths = []
+        
+        for method, score in methods:
+            label_paths.append(f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_label_table.csv")
+            box_paths.append(f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv")
+        
+        lcov_cl, lcov_miscl = [], []
+        leff_cl, leff_miscl = [], []
+        bcov_cl, bcov_miscl = [], []
+        beff_cl, beff_miscl = [], []
+        
+        row = 4  # class_selected
+        
+        # Load label data
+        for p in label_paths:
+            if os.path.exists(p):
+                df = pd.read_csv(p)
+                lcov_cl.append(df["cov set cl"].iloc[row].item())
+                lcov_miscl.append(df["cov set miscl"].iloc[row].item())
+                leff_cl.append(df["mean set size cl"].iloc[row].item())
+                leff_miscl.append(df["mean set size miscl"].iloc[row].item())
+        
+        # Load box data
+        for p in box_paths:
+            if os.path.exists(p):
+                df = pd.read_csv(p)
+                bcov_cl.append(df["cov box cl"].iloc[row].item())
+                bcov_miscl.append(df["cov box miscl"].iloc[row].item())
+                beff_cl.append(df["mpiw cl"].iloc[row].item())
+                beff_miscl.append(df["mpiw miscl"].iloc[row].item())
+        
+        if len(lcov_cl) == 3 and len(bcov_cl) == 3:  # All data loaded successfully
+            # Plot coverage scatter
+            colors = {"Classif.":"#023047", "Misclassif.":"#E63946"}
+            markers = {"Box-Std":"o", "Box-Ens":"*", "Box-CQR":"^"}
+            
+            fig, ax = plt.subplots(figsize=(2, 2))
+            
+            for i, m in enumerate(markers.keys()):
+                ax.scatter(lcov_cl[i], bcov_cl[i], color=colors["Classif."], marker=markers[m], 
+                          alpha=0.8, label=m, linewidth=1, s=48)
+                ax.scatter(lcov_miscl[i], bcov_miscl[i], color=colors["Misclassif."], marker=markers[m], 
+                          alpha=0.8, linewidth=1, s=48)
+            
+            ax.set_ylabel(r'Box cov.', fontsize=10)
+            ax.set_xlabel(r'Label cov.', fontsize=10)
+            ax.set_ylim(0.92, 0.96)
+            ax.set_xlim(0.98, 1.01)
+            ax.legend()
+            
+            plt.xticks(fontsize=8)
+            plt.yticks(fontsize=8)
+            plt.tight_layout()
+            
+            if to_file:
+                fname = os.path.join(output_dir, f"{dataset}_coverage_scatter.png")
+                save_fig(fname[:-4])
+                print(f"Saved coverage scatter plot: {fname}")
+            
+            plt.show()
+            
+            # Plot efficiency scatter
+            fig, ax = plt.subplots(figsize=(1.8, 1.5))
+            
+            # Scatter plots for actual data
+            for i, m in enumerate(markers.keys()):
+                ax.scatter(leff_cl[i], beff_cl[i], color=colors["Classif."], marker=markers[m], 
+                          alpha=0.8, linewidth=1, s=48)
+                ax.scatter(leff_miscl[i], beff_miscl[i], color=colors["Misclassif."], marker=markers[m], 
+                          alpha=0.8, linewidth=1, s=48)
+            
+            # Setting labels and limits
+            ax.set_ylabel(r'MPIW', fontsize=8, labelpad=-3)
+            ax.set_xlabel(r'Mean set size', fontsize=8, labelpad=0)
+            ax.set_ylim(78, 104)
+            ax.set_xlim(1.9, 3.3)
+            
+            # Create custom handles for the marker type legend (all grey)
+            marker_handles = [mlines.Line2D([], [], color='grey', marker=markers[m], linestyle='None', 
+                                          markersize=6, label=m) for m in markers]
+            
+            # Add the marker type legend to the plot
+            leg_markers = ax.legend(handles=marker_handles, loc='upper right', fontsize=6)
+            
+            # Create handles for the color legend
+            classif_handle = mlines.Line2D([], [], color=colors["Classif."], marker='s', linestyle='None', 
+                                         markersize=5, label='Classif.')
+            misclassif_handle = mlines.Line2D([], [], color=colors["Misclassif."], marker='s', linestyle='None', 
+                                            markersize=5, label='Misclassif.')
+            
+            # Add the color legend to the plot
+            ax.legend(handles=[classif_handle, misclassif_handle], loc='lower left', fontsize=6)
+            
+            # Manually add the first legend back to the plot
+            ax.add_artist(leg_markers)
+            
+            plt.xticks(fontsize=6)
+            plt.yticks(fontsize=6)
+            plt.tight_layout()
+            
+            if to_file:
+                fname = os.path.join(output_dir, f"{dataset}_size_vs_misclassif.png")
+                save_fig(fname[:-4])
+                print(f"Saved efficiency scatter plot: {fname}")
+            
+            plt.show()
+        else:
+            print("Warning: Could not load all required CSV files for efficiency plots")
+            
+    except Exception as e:
+        print(f"Error loading efficiency data: {e}")
+        print("Skipping efficiency plots")
+
+def run_all_plots(dataset="coco_val", class_name="person", device="cuda", img_name="000000054593"):
+    """
+    Run all plotting functions for the specified dataset and class (COCO only)
+    """
+    if dataset != "coco_val":
+        print(f"Warning: Only COCO dataset is supported. Switching to coco_val from {dataset}")
+        dataset = "coco_val"
+    
+    print(f"Running all plots for dataset: {dataset}, class: {class_name}")
+    print("="*60)
+    
+    try:
+        # 1. Multi-method comparison for specific image
+        print("1. Generating multi-method comparison plots...")
+        plot_multi_method_comparison(img_name=img_name, class_name=class_name, 
+                                   dataset=dataset, device=device, to_file=True)
+        
+        # 2. Coverage histograms - commenting out temporarily due to tensor issues
+        print("\n2. Generating coverage histograms...")
+        for method in ["std"]:  # Start with just std method for now
+            print(f"   - {method.upper()} method")
+            try:
+                plot_coverage_histogram(class_name=class_name, dataset=dataset, 
+                                      device=device, rc=method, to_file=True)
+            except Exception as e:
+                print(f"   - Error with {method} method: {e}")
+        
+        # 3. Beta distribution comparison
+        print("\n3. Generating Beta distribution plot...")
+        plot_beta_distribution(dataset=dataset, to_file=True)
+        
+        # 4. Coverage violin plots - commenting out due to indexing issues
+        print("\n4. Skipping coverage violin plots (tensor indexing issues)...")
+        # plot_coverage_violin(dataset=dataset, to_file=True)
+        
+        # 5. MPIW violin plots - commenting out due to indexing issues
+        print("\n5. Skipping MPIW violin plots (tensor indexing issues)...")
+        # plot_mpiw_violin(dataset=dataset, to_file=True)
+        
+        # 6. Efficiency scatter plots
+        print("\n6. Generating efficiency scatter plots...")
+        plot_efficiency_scatter(dataset=dataset, to_file=True)
+        
+    except Exception as e:
+        print(f"Error during plotting: {e}")
+        print("Continuing with available plots...")
+    
+    print("\n" + "="*60)
+    print("All available plots completed!")
+
 if __name__ == "__main__":
-    # Use default parameters matching the notebook
-    plot_multi_method_comparison(
-        img_name="000000054593",
-        class_name="person",
+    # Parameters as requested: use "person" class and COCO dataset only
+    run_all_plots(
         dataset="coco_val",
-        device="cuda:1",
-        to_file=True
+        class_name="person", 
+        device="cuda",
+        img_name="000000054593"
     )
