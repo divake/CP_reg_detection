@@ -171,6 +171,13 @@ def create_parser():
         required=False,
         help="Device to run code on (cpu, cuda).",
     )
+    parser.add_argument(
+        "--learnable_model_path",
+        type=str,
+        default=None,
+        required=False,
+        help="Path to trained learnable scoring function model (for learn_conf only).",
+    )
     return parser
 
 
