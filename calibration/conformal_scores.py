@@ -97,20 +97,20 @@ def load_trained_scoring_model(model_path: str = None):
 def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor = None, 
                  model_path: str = None, fallback_to_abs: bool = False):
     """
-    Learnable scoring function - uses trained model to compute nonconformity scores.
+    Learnable scoring function - uses trained model to compute nonconformity scores directly.
     
-    This function acts like abs_res() but uses a trained neural network to compute
-    more adaptive nonconformity scores based on prediction features.
+    Pure classification framework: MLP outputs learned nonconformity scores directly from features.
+    The model learns to map prediction features to appropriate nonconformity scores.
     
     Args:
-        gt: Ground truth coordinates [N] or [N, 4]
-        pred: Predicted coordinates [N] or [N, 4] 
-        pred_score: Prediction confidence scores [N] (required for learned scoring)
+        gt: Ground truth coordinates [N] or [N, 4] or single scalar (used for feature extraction during training)
+        pred: Predicted coordinates [N] or [N, 4] or single scalar
+        pred_score: Prediction confidence scores [N] or single scalar (required for learned scoring)
         model_path: Path to trained model (optional, uses default if None)
         fallback_to_abs: Deprecated - no longer used
         
     Returns:
-        scores: Learned nonconformity scores [N] or [N, 4]
+        scores: Learned nonconformity scores (same shape as input coordinates)
     """
     # Handle missing prediction scores
     if pred_score is None:
@@ -124,65 +124,86 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
     
     device = next(model.parameters()).device
     
-    # Ensure tensors are properly shaped
-    if pred.dim() == 1:
-        # Single coordinate case - reshape to [N, 4] where N=1
-        if len(pred) == 1:
-            # Single scalar coordinate - create [1, 4] by repeating
-            pred_coords = pred.repeat(4).unsqueeze(0)  # [1, 4]
-            pred_scores = pred_score.unsqueeze(0) if pred_score.dim() == 0 else pred_score[:1]
-            single_coord = True
+    # Convert inputs to tensors and ensure consistent shapes
+    gt_tensor = torch.tensor(gt, dtype=torch.float32) if not isinstance(gt, torch.Tensor) else gt.clone()
+    pred_tensor = torch.tensor(pred, dtype=torch.float32) if not isinstance(pred, torch.Tensor) else pred.clone()
+    score_tensor = torch.tensor(pred_score, dtype=torch.float32) if not isinstance(pred_score, torch.Tensor) else pred_score.clone()
+    
+    # Handle scalar inputs (single coordinate case)
+    if gt_tensor.dim() == 0:
+        gt_tensor = gt_tensor.unsqueeze(0)  # [1]
+    if pred_tensor.dim() == 0:
+        pred_tensor = pred_tensor.unsqueeze(0)  # [1]
+    if score_tensor.dim() == 0:
+        score_tensor = score_tensor.unsqueeze(0)  # [1]
+    
+    # For single coordinate evaluation, we need to create a dummy 4-coordinate vector
+    if gt_tensor.dim() == 1 and len(gt_tensor) == 1:
+        # Single coordinate case - create [1, 4] with actual coordinate at position 0
+        pred_coords = torch.stack([
+            pred_tensor[0],     # actual coordinate
+            pred_tensor[0],     # use same value for other coords (reasonable default)
+            pred_tensor[0] + 50, # x1 = x0 + width (reasonable default)
+            pred_tensor[0] + 50  # y1 = y0 + height (reasonable default)
+        ]).unsqueeze(0)  # [1, 4]
+        pred_scores = score_tensor[:1]  # [1]
+        
+        # Move to device
+        pred_coords = pred_coords.to(device)
+        pred_scores = pred_scores.to(device)
+        
+        # Extract features and get learned nonconformity score
+        features = feature_extractor.extract_features(pred_coords, pred_scores)
+        normalized_features = feature_extractor.normalize_features(features)
+        
+        with torch.no_grad():
+            learned_nonconf_score = model(normalized_features).squeeze()  # scalar or [1]
+        
+        # Pure classification framework: return learned score directly
+        if learned_nonconf_score.dim() == 0:
+            learned_score_value = learned_nonconf_score.item()
         else:
-            # Multiple coordinates in 1D - reshape as [N, 1] then expand
-            n_coords = len(pred)
-            pred_coords = pred.unsqueeze(1).expand(-1, 4)  # [N, 4]
-            pred_scores = pred_score[:n_coords] if len(pred_score) >= n_coords else pred_score.repeat(n_coords)
-            single_coord = False
-    elif pred.dim() == 2 and pred.shape[1] == 4:
-        # Multi-coordinate case [N, 4] - already correct shape
-        pred_coords = pred
-        pred_scores = pred_score
-        single_coord = False
+            learned_score_value = learned_nonconf_score[0].item()
+        
+        return learned_score_value
+    
+    # Multi-coordinate case
+    elif gt_tensor.dim() == 1 and len(gt_tensor) > 1:
+        # Multiple single coordinates - process each one
+        results = []
+        for i in range(len(gt_tensor)):
+            single_result = learned_score(
+                gt_tensor[i].item(), 
+                pred_tensor[i].item(), 
+                score_tensor[i].item(),
+                model_path
+            )
+            results.append(single_result)
+        return torch.tensor(results, dtype=torch.float32)
+    
+    # Full 4-coordinate case [N, 4] - the main case used during evaluation
+    elif gt_tensor.dim() == 2 and gt_tensor.shape[1] == 4:
+        # Move to device
+        gt_tensor = gt_tensor.to(device)
+        pred_tensor = pred_tensor.to(device)
+        score_tensor = score_tensor.to(device)
+        
+        # Extract features and get learned nonconformity scores
+        features = feature_extractor.extract_features(pred_tensor, score_tensor)
+        normalized_features = feature_extractor.normalize_features(features)
+        
+        with torch.no_grad():
+            learned_nonconf_scores = model(normalized_features).squeeze()  # [N]
+        
+        # Pure classification framework: return learned scores directly, broadcast to coordinates
+        if learned_nonconf_scores.dim() == 0:
+            learned_nonconf_scores = learned_nonconf_scores.unsqueeze(0)  # [1]
+        learned_scores_broadcast = learned_nonconf_scores.unsqueeze(1).expand(-1, 4)  # [N, 4]
+        
+        return learned_scores_broadcast.cpu()
+    
     else:
-        raise ValueError(f"Unexpected pred shape: {pred.shape}. Expected 1D tensor or [N, 4] tensor")
-    
-    # Move to device
-    pred_coords = pred_coords.to(device)
-    pred_scores = pred_scores.to(device)
-    
-    # Extract features
-    features = feature_extractor.extract_features(pred_coords, pred_scores)
-    
-    # Normalize features
-    normalized_features = feature_extractor.normalize_features(features)
-    
-    # Get learned scores
-    with torch.no_grad():
-        learned_scores = model(normalized_features).squeeze()  # [N]
-    
-    # Handle different return cases
-    if single_coord:
-        # Return single score
-        return learned_scores.item() if learned_scores.dim() == 0 else learned_scores[0].item()
-    else:
-        # Return scores for all samples - compute absolute residual and scale by learned score
-        gt_tensor = gt.to(device)
-        if gt_tensor.dim() == 1:
-            if len(gt_tensor) == 1:
-                gt_tensor = gt_tensor.repeat(4).unsqueeze(0)  # [1, 4]
-            else:
-                gt_tensor = gt_tensor.unsqueeze(1).expand(-1, 4)  # [N, 4]
-        
-        # Compute absolute errors
-        abs_errors = torch.abs(gt_tensor - pred_coords)  # [N, 4]
-        
-        # Scale by learned scores (broadcast learned scores to match coordinates)
-        if learned_scores.dim() == 0:
-            learned_scores = learned_scores.unsqueeze(0)
-        scaled_scores = abs_errors / (learned_scores.unsqueeze(1).expand(-1, 4) + 1e-6)
-        
-        # Return mean across coordinates for each sample
-        return scaled_scores.mean(dim=1).cpu()
+        raise ValueError(f"Unexpected tensor shapes: gt={gt_tensor.shape}, pred={pred_tensor.shape}")
 
 
 def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor, 

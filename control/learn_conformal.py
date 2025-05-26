@@ -439,26 +439,27 @@ class LearnConformalDataCollector(DataCollector):
                 pred_logits_all,
             )
 
-            # Add learnable conformal scores - THIS IS THE KEY CHANGE!
-            # Use learnable scoring for each coordinate
-            for coord_idx, coord_name in enumerate(["x0", "y0", "x1", "y1"]):
-                gt_coord = gt_box[idx].tensor[:, coord_idx]
-                pred_coord = pred_box[idx].tensor[:, coord_idx]
-                pred_scores_coord = pred_score[idx]  # Use prediction confidence scores
+            # Add learnable conformal scores - OPTIMIZED VERSION!
+            # Process all coordinates together for better efficiency and consistency
+            if len(idx) > 0:
+                gt_coords_full = gt_box[idx].tensor  # [N, 4]
+                pred_coords_full = pred_box[idx].tensor  # [N, 4] 
+                pred_scores_full = pred_score[idx]  # [N]
                 
-                # Calculate learnable scores
-                learn_scores = []
-                for i in range(len(gt_coord)):
-                    # Use learned_score function for each instance
-                    score = learned_score(
-                        gt=gt_coord[i:i+1], 
-                        pred=pred_coord[i:i+1], 
-                        pred_score=pred_scores_coord[i:i+1],
-                        model_path=self.learnable_model_path
-                    )
-                    learn_scores.append(float(score))
+                # Get learned nonconformity scores for all coordinates at once
+                # This returns [N, 4] - one score per coordinate per instance
+                all_learned_scores = learned_score(
+                    gt=gt_coords_full,
+                    pred=pred_coords_full,
+                    pred_score=pred_scores_full,
+                    model_path=self.learnable_model_path
+                )
                 
-                self.ist_list[c][f"learn_res_{coord_name}"] += learn_scores
+                # Convert to lists and add to instance lists
+                coord_names = ["x0", "y0", "x1", "y1"]
+                for coord_idx, coord_name in enumerate(coord_names):
+                    coord_scores = all_learned_scores[:, coord_idx].tolist()
+                    self.ist_list[c][f"learn_res_{coord_name}"] += coord_scores
                 
             # Also keep absolute residual scores as backup/comparison
             self.ist_list[c]["abs_res_x0"] += abs_res(
