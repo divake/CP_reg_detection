@@ -187,3 +187,5 @@ domain_shift_analysis.png
 learnable_scoring_fn/experiments/sophisticated_scoring_cfg_std_rank/training_curves_comprehensive.png
 plots/coco_val/
 plots/learnable_method_comparison/
+CLAUDE.md
+learnable_scoring_fn/experiments/*

@@ -1,35 +1,44 @@
 """
-Learnable Scoring Function Package
+Learnable Scoring Function Package - Regression Based
 
-This package implements a learnable scoring function for conformal prediction
-in object detection, following the classification framework pattern with 
-per-epoch tau calculation and curriculum learning.
+This package implements a regression-based learnable scoring function for 
+conformal prediction in object detection. The scoring function outputs
+interval widths, not classification scores.
 
 Main Components:
-- model.py: Neural network architecture and loss functions
+- model.py: Regression neural network and loss functions
 - feature_utils.py: Feature extraction and normalization
 - data_utils.py: Data loading and preprocessing utilities  
-- train_scoring.py: Main training script
+- train.py: Main training script
 
 Usage:
 1. Train the scoring function:
    ```bash
    cd /ssd_4TB/divake/conformal-od
-   python -m learnable_scoring_fn.train_scoring --config_file cfg_std_rank
+   python learnable_scoring_fn/run_training.py
    ```
 
-2. Use trained model in conformal prediction:
+2. Use trained model for prediction intervals:
    ```python
-   from calibration.conformal_scores import learned_score
-   score = learned_score(gt_coords, pred_coords, pred_scores)
+   from learnable_scoring_fn import RegressionScoringFunction, load_regression_model
+   model, checkpoint = load_regression_model('path/to/model.pt')
+   widths = model(features)
+   intervals = predictions ± (widths * tau)
    ```
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "Conformal Object Detection Team"
 
 # Import main components
-from .model import ScoringMLP, CoverageLoss, AdaptiveLambdaScheduler, save_model, load_model
+from .model import (
+    RegressionScoringFunction,
+    RegressionCoverageLoss,
+    calculate_tau_regression,
+    UncertaintyFeatureExtractor,
+    save_regression_model,
+    load_regression_model
+)
 from .feature_utils import FeatureExtractor, get_feature_names
 from .data_utils import (
     prepare_training_data, 
@@ -42,11 +51,12 @@ from .data_utils import (
 # Define what gets imported with "from learnable_scoring_fn import *"
 __all__ = [
     # Model components
-    'ScoringMLP',
-    'CoverageLoss', 
-    'AdaptiveLambdaScheduler',
-    'save_model',
-    'load_model',
+    'RegressionScoringFunction',
+    'RegressionCoverageLoss',
+    'calculate_tau_regression',
+    'UncertaintyFeatureExtractor',
+    'save_regression_model',
+    'load_regression_model',
     
     # Feature utilities
     'FeatureExtractor',

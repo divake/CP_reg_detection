@@ -1,358 +1,384 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Tuple, Dict, Optional
 
 
-class ScoringMLP(nn.Module):
+class RegressionScoringFunction(nn.Module):
     """
-    MLP architecture for the learnable scoring function following classification framework.
+    Regression-based scoring function for conformal prediction intervals.
     
-    This network takes features from object detection predictions 
-    and outputs a single learned nonconformity score following the
-    sophisticated approach from the reference classification implementation.
+    This network outputs the WIDTH of prediction intervals, not classification scores.
+    The actual prediction interval is: pred ± (score * tau)
     """
     
-    def __init__(self, input_dim: int = 13, hidden_dims: list = [128, 64, 32], 
-                 output_dim: int = 1, dropout_rate: float = 0.2, config: dict = None):
+    def __init__(self, input_dim: int = 17, hidden_dims: list = [256, 128, 64], 
+                 dropout_rate: float = 0.15, activation: str = 'relu'):
         """
         Args:
-            input_dim: Dimension of input features (coordinates + confidence + hand-crafted features)
+            input_dim: Dimension of input features (13 geometric + 4 uncertainty features)
             hidden_dims: List of hidden layer dimensions
-            output_dim: Dimension of output scores (1 for single score)
             dropout_rate: Dropout probability for regularization
-            config: Configuration dictionary for advanced settings
+            activation: Activation function type ('relu', 'elu', 'leaky_relu')
         """
-        super(ScoringMLP, self).__init__()
+        super(RegressionScoringFunction, self).__init__()
         
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
-        self.output_dim = output_dim
         self.dropout_rate = dropout_rate
         
-        # Initialize weights function for conservative initialization
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                if m.bias is not None:
-                    m.bias.data.fill_(0.5)
-        
-        # Build network layers with batch normalization
+        # Build network layers
         layers = []
         prev_dim = input_dim
         
-        # First layer with special initialization
-        first_layer = nn.Linear(prev_dim, hidden_dims[0])
-        nn.init.normal_(first_layer.weight, mean=0.0, std=0.05)
-        nn.init.constant_(first_layer.bias, 0.5)
-        
-        layers.append(first_layer)
-        layers.append(nn.BatchNorm1d(hidden_dims[0]))
-        layers.append(nn.LeakyReLU(negative_slope=0.01))
-        
-        # Hidden layers with dropout and batch norm
-        for i in range(len(hidden_dims)-1):
+        # Hidden layers with proper regularization
+        for i, hidden_dim in enumerate(hidden_dims):
             layers.extend([
-                nn.Linear(hidden_dims[i], hidden_dims[i+1]),
-                nn.BatchNorm1d(hidden_dims[i+1]),
-                nn.LeakyReLU(negative_slope=0.01),
+                nn.Linear(prev_dim, hidden_dim),
+                nn.BatchNorm1d(hidden_dim),  # Add batch normalization for stability
+                self._get_activation(activation),
                 nn.Dropout(dropout_rate)
             ])
+            prev_dim = hidden_dim
         
-        # Final layer with careful initialization
-        final_layer = nn.Linear(hidden_dims[-1], 1)
-        nn.init.uniform_(final_layer.weight, -0.001, 0.001)
-        nn.init.constant_(final_layer.bias, 0.7)
-        layers.append(final_layer)
-        
-        # Final activation to ensure positive outputs
-        layers.append(nn.Softplus(beta=1.0))
+        # Output layer - predict interval WIDTH (must be positive)
+        layers.append(nn.Linear(hidden_dims[-1], 1))
         
         self.network = nn.Sequential(*layers)
         
-        # Initialize remaining layers (skip first layer which we set manually)
-        for m in self.network[3:]:
-            if isinstance(m, (nn.Linear, nn.BatchNorm1d)):
-                init_weights(m)
+        # Initialize weights properly for regression
+        self._initialize_weights()
         
-        # Regularization parameters
-        self.l2_lambda = 0.001
-        self.stability_factor = 0.1
-        self.separation_factor = 1.0
+        # Stored tau value for inference
+        self.tau = None
         
-        # Store current tau for evaluation time separation
-        self.tau = 0.3
-        
-        # Initialize loss components
-        self.separation_loss = 0.0
-        self.stability_loss = 0.0
-        self.l2_reg = 0.0
-        
-    def set_tau(self, tau):
-        """Set current tau value for evaluation-time scoring"""
-        self.tau = tau
-        
-    def forward(self, x: torch.Tensor, true_coverage_target: torch.Tensor = None) -> torch.Tensor:
+    def _get_activation(self, activation: str):
+        """Get activation function by name."""
+        if activation == 'relu':
+            return nn.ReLU()
+        elif activation == 'elu':
+            return nn.ELU()
+        elif activation == 'leaky_relu':
+            return nn.LeakyReLU(0.1)
+        else:
+            return nn.ReLU()
+    
+    def _initialize_weights(self):
+        """Initialize network weights for regression task."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                # He initialization for ReLU activations
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.BatchNorm1d):
+                nn.init.constant_(module.weight, 1)
+                nn.init.constant_(module.bias, 0)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the network following classification framework.
+        Forward pass to predict interval width.
         
         Args:
             x: Input tensor of shape [batch_size, input_dim]
-               Features include coordinates, confidence, and hand-crafted features
-            true_coverage_target: Optional tensor indicating if this sample should be covered
+               Features include coordinates, confidence, geometric features,
+               and uncertainty indicators
         
         Returns:
-            scores: Tensor of shape [batch_size, 1]
-                   Learned nonconformity scores (always positive)
+            widths: Tensor of shape [batch_size, 1]
+                   Predicted interval widths (always positive)
         """
-        batch_size = x.size(0)
-        
         # Forward pass through network
-        scores = self.network(x)
+        raw_output = self.network(x)
         
-        # Ensure scores have proper shape [batch_size, 1]
-        if scores.dim() == 1:
-            scores = scores.view(batch_size, 1)
-        elif scores.shape[1] > 1:
-            scores = scores.mean(dim=1, keepdim=True)
+        # Ensure positive width using softplus
+        # Initialize to produce widths around 25 pixels (90th percentile error)
+        # F.softplus(3.2) + 5.0 ≈ 29.4 pixels, which should give ~90% coverage
+        widths = F.softplus(raw_output + 3.2) + 20.0  # Start around ~25 pixels
         
-        # Apply sophisticated regularization during training
-        if self.training and true_coverage_target is not None:
-            self._compute_training_losses(scores, true_coverage_target)
-        else:
-            self.separation_loss = 0.0
-            self.stability_loss = 0.0
+        # Clamp to reasonable range for bounding box coordinates
+        widths = torch.clamp(widths, min=5.0, max=100.0)
         
-        # Apply clamping to keep scores in reasonable range
-        scores = torch.clamp(scores, min=0.1, max=10.0)
-        
-        # Compute L2 regularization
-        l2_reg = sum(torch.sum(param ** 2) for param in self.parameters())
-        self.l2_reg = self.l2_lambda * l2_reg
-        
-        return scores
+        return widths
     
-    def _compute_training_losses(self, scores: torch.Tensor, true_coverage_target: torch.Tensor):
+    def set_tau(self, tau: torch.Tensor):
+        """Store tau value for inference."""
+        self.tau = tau
+    
+    def get_prediction_intervals(self, predictions: torch.Tensor, widths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Compute sophisticated training losses following classification framework.
+        Calculate prediction intervals given predictions and learned widths.
         
         Args:
-            scores: Current nonconformity scores [batch_size, 1]
-            true_coverage_target: Binary tensor [batch_size] indicating if sample should be covered
-        """
-        scores_squeezed = scores.squeeze(1)  # [batch_size]
-        
-        # Store scores for loss calculation
-        self.true_class_scores = scores_squeezed
-        
-        # Separation loss: push scores of samples that should be covered toward lower values
-        covered_mask = (true_coverage_target == 1).float()
-        uncovered_mask = (true_coverage_target == 0).float()
-        
-        # Gentle separation loss
-        covered_score_term = torch.mean(covered_mask * (scores_squeezed ** 2))
-        uncovered_score_term = torch.mean(uncovered_mask * torch.relu(2.0 - scores_squeezed))
-        
-        # Below-tau term for covered samples
-        below_tau_term = torch.mean(covered_mask * torch.relu(scores_squeezed - (self.tau * 0.8)) ** 2)
-        
-        # Combined separation loss
-        self.separation_loss = self.separation_factor * (
-            0.3 * covered_score_term + 
-            0.3 * uncovered_score_term + 
-            0.4 * below_tau_term
-        )
-        
-        # Stability loss: encourage consistent outputs for similar inputs
-        if self.training:
-            perturbed_x = scores.detach() + torch.randn_like(scores) * 0.01
-            perturbed_scores = torch.clamp(perturbed_x, min=0.1, max=10.0)
-            self.stability_loss = self.stability_factor * torch.mean((scores - perturbed_scores)**2)
-        else:
-            self.stability_loss = 0.0
-    
-    def get_total_loss(self):
-        """Get total loss including all regularization terms."""
-        return self.separation_loss + self.stability_loss + self.l2_reg
-    
-    def get_model_info(self) -> dict:
-        """Return model configuration information."""
-        return {
-            'input_dim': self.input_dim,
-            'hidden_dims': self.hidden_dims,
-            'output_dim': self.output_dim,
-            'dropout_rate': self.dropout_rate,
-            'total_params': sum(p.numel() for p in self.parameters()),
-            'trainable_params': sum(p.numel() for p in self.parameters() if p.requires_grad),
-            'l2_lambda': self.l2_lambda,
-            'stability_factor': self.stability_factor,
-            'separation_factor': self.separation_factor
-        }
-
-
-class CoverageLoss(nn.Module):
-    """
-    Sophisticated coverage loss following classification framework.
-    
-    Combines coverage deviation, size penalty, and margin-based separation
-    to achieve both high coverage and small prediction sets.
-    """
-    
-    def __init__(self, target_coverage: float = 0.9, lambda_width: float = 0.1, 
-                 margin_weight: float = 0.1):
-        """
-        Args:
-            target_coverage: Target coverage level (0.9 for 90% coverage)
-            lambda_width: Weight for prediction set size penalty
-            margin_weight: Weight for margin-based separation loss
-        """
-        super(CoverageLoss, self).__init__()
-        self.target_coverage = target_coverage
-        self.lambda_width = lambda_width
-        self.margin_weight = margin_weight
-    
-    def forward(self, scores: torch.Tensor, tau: torch.Tensor, 
-                gt_coords: torch.Tensor = None, pred_coords: torch.Tensor = None) -> torch.Tensor:
-        """
-        Compute sophisticated coverage loss.
-        
-        Args:
-            scores: Nonconformity scores [batch_size, 1]
-            tau: Current tau threshold [1] or [4] for coordinate-wise
-            gt_coords: Ground truth coordinates [batch_size, 4] 
-            pred_coords: Predicted coordinates [batch_size, 4]
-        
+            predictions: [batch_size, 4] predicted bounding box coordinates
+            widths: [batch_size, 1] learned interval widths from this model
+            
         Returns:
-            loss: Total coverage loss
+            lower_bounds: [batch_size, 4] lower bounds of prediction intervals
+            upper_bounds: [batch_size, 4] upper bounds of prediction intervals
         """
-        batch_size = scores.size(0)
-        scores_squeezed = scores.squeeze(1)  # [batch_size]
+        if self.tau is None:
+            raise ValueError("Must set tau using set_tau() before computing intervals")
         
-        # Ensure tau is broadcastable
-        if tau.dim() == 0:
-            tau_broadcast = tau.expand(batch_size)
-        elif tau.size(0) == 1:
-            tau_broadcast = tau.expand(batch_size)
-        else:
-            tau_broadcast = tau[:batch_size] if tau.size(0) >= batch_size else tau.expand(batch_size)
+        # Expand widths to match coordinate dimensions
+        interval_widths = widths * self.tau  # [batch_size, 1]
+        interval_widths = interval_widths.expand(-1, 4)  # [batch_size, 4]
         
-        # Coverage calculation: score <= tau means covered
-        covered = (scores_squeezed <= tau_broadcast).float()
-        current_coverage = covered.mean()
+        # Calculate intervals
+        lower_bounds = predictions - interval_widths
+        upper_bounds = predictions + interval_widths
         
-        # Coverage deviation loss
-        coverage_loss = torch.abs(current_coverage - self.target_coverage)
-        
-        # Size penalty: encourage smaller prediction sets (higher scores)
-        size_penalty = torch.mean(torch.relu(tau_broadcast - scores_squeezed))
-        
-        # Margin-based loss if ground truth is available
-        margin_loss = 0.0
-        if gt_coords is not None and pred_coords is not None:
-            # Compute coordinate-wise errors
-            coord_errors = torch.abs(gt_coords - pred_coords)  # [batch_size, 4]
-            avg_error = coord_errors.mean(dim=1)  # [batch_size]
-            
-            # Encourage higher scores for higher errors
-            margin_loss = torch.mean(torch.relu(avg_error - scores_squeezed + 1.0))
-        
-        # Combine losses
-        total_loss = (coverage_loss + 
-                     self.lambda_width * size_penalty + 
-                     self.margin_weight * margin_loss)
-        
-        return total_loss
+        return lower_bounds, upper_bounds
 
 
-class AdaptiveLambdaScheduler:
+class RegressionCoverageLoss(nn.Module):
     """
-    Enhanced scheduler for adaptive lambda_width during training.
+    Coverage loss for regression-based conformal prediction.
     
-    Implements sophisticated curriculum learning with multiple phases:
-    1. Warmup: focus on coverage
-    2. Ramp: gradually balance coverage and efficiency  
-    3. Fine-tune: maintain optimal balance
+    This loss ensures that ground truth falls within the predicted intervals
+    while minimizing interval width for efficiency.
     """
     
-    def __init__(self, initial_lambda: float = 0.01, final_lambda: float = 0.1, 
-                 warmup_epochs: int = 20, ramp_epochs: int = 30, schedule_type: str = 'linear'):
+    def __init__(self, target_coverage: float = 0.9, efficiency_weight: float = 0.1,
+                 calibration_weight: float = 0.05):
         """
         Args:
-            initial_lambda: Starting lambda value
-            final_lambda: Final lambda value  
-            warmup_epochs: Epochs to keep initial lambda
-            ramp_epochs: Epochs to ramp from initial to final lambda
-            schedule_type: Type of schedule ('linear', 'cosine', 'exponential')
+            target_coverage: Target coverage level (e.g., 0.9 for 90%)
+            efficiency_weight: Weight for interval width penalty
+            calibration_weight: Weight for calibration loss
         """
-        self.initial_lambda = initial_lambda
-        self.final_lambda = final_lambda
-        self.warmup_epochs = warmup_epochs
-        self.ramp_epochs = ramp_epochs
-        self.total_transition_epochs = warmup_epochs + ramp_epochs
-        self.schedule_type = schedule_type
+        super(RegressionCoverageLoss, self).__init__()
+        self.target_coverage = target_coverage
+        self.efficiency_weight = efficiency_weight
+        self.calibration_weight = calibration_weight
     
-    def get_lambda(self, epoch: int) -> float:
-        """Get lambda value for current epoch with sophisticated scheduling."""
-        if epoch < self.warmup_epochs:
-            # Warmup phase: keep initial lambda
-            return self.initial_lambda
-        elif epoch < self.total_transition_epochs:
-            # Ramp phase: use specified schedule
-            progress = (epoch - self.warmup_epochs) / self.ramp_epochs
+    def forward(self, widths: torch.Tensor, gt_coords: torch.Tensor, 
+                pred_coords: torch.Tensor, tau: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """
+        Compute regression coverage loss with CORRECT interval coverage.
+        
+        Args:
+            widths: [batch_size, 1] predicted interval widths
+            gt_coords: [batch_size, 4] ground truth coordinates
+            pred_coords: [batch_size, 4] predicted coordinates
+            tau: Current tau value (scalar or tensor)
             
-            if self.schedule_type == 'linear':
-                lambda_val = self.initial_lambda + progress * (self.final_lambda - self.initial_lambda)
-            elif self.schedule_type == 'cosine':
-                lambda_val = self.initial_lambda + 0.5 * (self.final_lambda - self.initial_lambda) * (1 - torch.cos(torch.tensor(progress * 3.14159)).item())
-            elif self.schedule_type == 'exponential':
-                lambda_val = self.initial_lambda * (self.final_lambda / self.initial_lambda) ** progress
-            else:
-                lambda_val = self.initial_lambda + progress * (self.final_lambda - self.initial_lambda)
-                
-            return lambda_val
+        Returns:
+            losses: Dictionary containing individual loss components
+        """
+        batch_size = widths.size(0)
+        
+        # Calculate actual errors
+        errors = torch.abs(gt_coords - pred_coords)  # [batch_size, 4]
+        
+        # Calculate prediction interval bounds
+        interval_half_widths = widths * tau  # [batch_size, 1]
+        interval_half_widths_expanded = interval_half_widths.expand(-1, 4)  # [batch_size, 4]
+        
+        # CORRECT: Form prediction intervals
+        lower_bounds = pred_coords - interval_half_widths_expanded
+        upper_bounds = pred_coords + interval_half_widths_expanded
+        
+        # CORRECT: Check if ground truth falls within intervals
+        # Coverage = 1 if gt is within [lower, upper], 0 otherwise
+        covered_per_coord = (gt_coords >= lower_bounds) & (gt_coords <= upper_bounds)  # [batch_size, 4]
+        
+        # For bounding boxes: ALL coordinates must be covered
+        sample_covered = covered_per_coord.all(dim=1).float()  # [batch_size]
+        actual_coverage = sample_covered.mean()
+        
+        # 1. Coverage Loss - penalize under-coverage more than over-coverage
+        coverage_error = actual_coverage - self.target_coverage
+        if coverage_error < 0:  # Under-coverage
+            coverage_loss = coverage_error ** 2 * 10.0  # Heavily penalize
+        else:  # Over-coverage
+            coverage_loss = coverage_error ** 2
+        
+        # 2. Efficiency Loss - directly minimize average interval width
+        # No normalization by error - we want absolute efficiency
+        efficiency_loss = widths.mean()
+        
+        # 3. Calibration Loss - encourage proportionality between widths and actual errors
+        # Widths should be proportional to the expected error magnitude
+        avg_errors_per_sample = errors.mean(dim=1, keepdim=True)  # [batch_size, 1]
+        
+        # Use correlation-based calibration loss
+        # High correlation means widths adapt to error patterns
+        error_mean = avg_errors_per_sample.mean()
+        width_mean = widths.mean()
+        
+        error_centered = avg_errors_per_sample - error_mean
+        width_centered = widths - width_mean
+        
+        covariance = (error_centered * width_centered).mean()
+        error_std = error_centered.pow(2).mean().sqrt() + 1e-6
+        width_std = width_centered.pow(2).mean().sqrt() + 1e-6
+        
+        correlation = covariance / (error_std * width_std)
+        calibration_loss = 1.0 - correlation  # Want high correlation
+        
+        # Combine losses with adaptive weighting
+        if actual_coverage < self.target_coverage - 0.3:  # Way under coverage (< 60%)
+            # Heavily prioritize coverage, almost ignore efficiency
+            total_loss = coverage_loss + 0.0001 * self.efficiency_weight * efficiency_loss
+        elif actual_coverage < self.target_coverage - 0.1:  # Under coverage (< 80%)
+            # Prioritize coverage, some efficiency
+            total_loss = coverage_loss + 0.01 * self.efficiency_weight * efficiency_loss
         else:
-            # Final phase: keep final lambda
-            return self.final_lambda
+            # Normal weighting
+            total_loss = (coverage_loss + 
+                         self.efficiency_weight * efficiency_loss +
+                         self.calibration_weight * calibration_loss)
+        
+        # Return detailed losses for monitoring
+        losses = {
+            'total': total_loss,
+            'coverage': coverage_loss,
+            'efficiency': efficiency_loss,
+            'calibration': calibration_loss,
+            'actual_coverage': actual_coverage,
+            'avg_width': widths.mean(),
+            'correlation': correlation
+        }
+        
+        return losses
 
 
-def save_model(model: ScoringMLP, optimizer: torch.optim.Optimizer, 
-               epoch: int, loss: float, model_config: dict, 
-               filepath: str, feature_stats: dict = None):
+def calculate_tau_regression(widths: torch.Tensor, errors: torch.Tensor, 
+                            target_coverage: float = 0.9) -> torch.Tensor:
     """
-    Save model checkpoint with all necessary information.
+    Calculate tau for regression conformal prediction without circular dependency.
+    
+    In the fixed approach, we use tau=1.0 and let the model learn appropriate widths.
+    This avoids the circular dependency where tau depends on the widths being learned.
     
     Args:
-        model: Trained ScoringMLP model
-        optimizer: Optimizer state
-        epoch: Current epoch
-        loss: Current loss value
-        model_config: Model configuration dictionary
-        filepath: Path to save checkpoint
-        feature_stats: Feature normalization statistics
+        widths: [n_cal, 1] predicted interval widths from scoring function (not used)
+        errors: [n_cal, 4] absolute errors between predictions and ground truth
+        target_coverage: Desired coverage level
+        
+    Returns:
+        tau: Fixed value of 1.0
     """
+    # Use fixed tau = 1.0
+    # The model will learn to output widths that achieve target coverage
+    # when multiplied by tau = 1.0
+    return torch.tensor(1.0, device=widths.device)
+
+
+class UncertaintyFeatureExtractor:
+    """
+    Extract uncertainty-related features to augment geometric features.
+    
+    These features help the scoring function understand prediction uncertainty.
+    """
+    
+    def __init__(self):
+        self.error_stats = None
+    
+    def fit_error_distribution(self, train_errors: torch.Tensor):
+        """
+        Fit error distribution statistics from training data.
+        
+        Args:
+            train_errors: [n_train, 4] training set errors
+        """
+        self.error_stats = {
+            'mean': train_errors.mean(dim=0),
+            'std': train_errors.std(dim=0),
+            'quantiles': {
+                'q25': torch.quantile(train_errors, 0.25, dim=0),
+                'q50': torch.quantile(train_errors, 0.50, dim=0),
+                'q75': torch.quantile(train_errors, 0.75, dim=0),
+                'q90': torch.quantile(train_errors, 0.90, dim=0)
+            }
+        }
+    
+    def extract_uncertainty_features(self, pred_coords: torch.Tensor, 
+                                   confidence: torch.Tensor,
+                                   ensemble_std: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Extract uncertainty-related features.
+        
+        Args:
+            pred_coords: [batch_size, 4] predicted coordinates
+            confidence: [batch_size] confidence scores
+            ensemble_std: [batch_size, 4] ensemble standard deviations (if available)
+            
+        Returns:
+            features: [batch_size, 4] uncertainty features
+        """
+        batch_size = pred_coords.size(0)
+        device = pred_coords.device
+        
+        features = []
+        
+        # 1. Confidence-based uncertainty (1 - confidence)
+        uncertainty_score = (1 - confidence).unsqueeze(1)  # [batch_size, 1]
+        features.append(uncertainty_score)
+        
+        # 2. Coordinate variance if ensemble predictions available
+        if ensemble_std is not None:
+            # Average ensemble uncertainty across coordinates
+            avg_ensemble_uncertainty = ensemble_std.mean(dim=1, keepdim=True)  # [batch_size, 1]
+            features.append(avg_ensemble_uncertainty)
+        else:
+            # Use confidence-based proxy
+            features.append(uncertainty_score * 10.0)  # Scale up for similar magnitude
+        
+        # 3. Expected error based on confidence (learned mapping)
+        if self.error_stats is not None:
+            # Simple linear mapping from confidence to expected error
+            expected_error = (1 - confidence) * self.error_stats['mean'].mean()
+            features.append(expected_error.unsqueeze(1))
+        else:
+            features.append(uncertainty_score * 50.0)  # Default scaling
+        
+        # 4. Difficulty score based on box characteristics
+        # Smaller boxes and extreme aspect ratios are typically harder
+        width = pred_coords[:, 2] - pred_coords[:, 0]
+        height = pred_coords[:, 3] - pred_coords[:, 1]
+        area = width * height
+        aspect_ratio = width / (height + 1e-6)
+        
+        # Normalize area (smaller boxes = higher difficulty)
+        area_difficulty = 1.0 / (area + 1.0)
+        
+        # Aspect ratio difficulty (extreme ratios = higher difficulty)
+        aspect_difficulty = torch.abs(torch.log(aspect_ratio + 1e-6))
+        
+        difficulty_score = (area_difficulty + aspect_difficulty) / 2
+        features.append(difficulty_score.unsqueeze(1))
+        
+        # Concatenate all uncertainty features
+        uncertainty_features = torch.cat(features, dim=1)  # [batch_size, 4]
+        
+        return uncertainty_features
+
+
+def save_regression_model(model: RegressionScoringFunction, optimizer: torch.optim.Optimizer,
+                         epoch: int, losses: dict, tau: float, filepath: str,
+                         feature_stats: dict = None, error_stats: dict = None):
+    """Save regression model checkpoint with all necessary information."""
     checkpoint = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss,
-        'model_config': model_config,
-        'feature_stats': feature_stats
+        'losses': losses,
+        'tau': tau,
+        'model_config': {
+            'input_dim': model.input_dim,
+            'hidden_dims': model.hidden_dims,
+            'dropout_rate': model.dropout_rate
+        },
+        'feature_stats': feature_stats,
+        'error_stats': error_stats
     }
     torch.save(checkpoint, filepath)
 
 
-def load_model(filepath: str, device: torch.device = None) -> tuple:
-    """
-    Load model checkpoint.
-    
-    Args:
-        filepath: Path to checkpoint file
-        device: Device to load model on
-        
-    Returns:
-        model: Loaded ScoringMLP model
-        optimizer: Loaded optimizer (if available)
-        checkpoint: Full checkpoint dictionary
-    """
+def load_regression_model(filepath: str, device: torch.device = None) -> Tuple:
+    """Load regression model checkpoint."""
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -360,21 +386,18 @@ def load_model(filepath: str, device: torch.device = None) -> tuple:
     
     # Recreate model from config
     model_config = checkpoint['model_config']
-    model = ScoringMLP(
+    model = RegressionScoringFunction(
         input_dim=model_config['input_dim'],
         hidden_dims=model_config['hidden_dims'],
-        output_dim=model_config['output_dim'],
         dropout_rate=model_config['dropout_rate']
     )
     
     # Load weights
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
-    model.eval()
     
-    # Create optimizer (for potential continued training)
-    optimizer = torch.optim.Adam(model.parameters())
-    if 'optimizer_state_dict' in checkpoint:
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    # Set tau if available
+    if 'tau' in checkpoint:
+        model.set_tau(checkpoint['tau'])
     
-    return model, optimizer, checkpoint 
+    return model, checkpoint
