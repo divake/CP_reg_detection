@@ -100,9 +100,7 @@ class FeatureExtractor:
         """
         self.feature_stats = {
             'mean': features.mean(dim=0),
-            'std': features.std(dim=0).clamp(min=1e-6),
-            'min': features.min(dim=0)[0],
-            'max': features.max(dim=0)[0]
+            'std': features.std(dim=0).clamp(min=1e-6)
         }
     
     def normalize_features(self, features: torch.Tensor) -> torch.Tensor:
@@ -121,31 +119,11 @@ class FeatureExtractor:
         # Get the device of input features
         device = features.device
         
-        # Apply different normalization strategies for different feature types
-        normalized = features.clone()
+        # Apply consistent z-score normalization to all features for stability
+        mean_vals = self.feature_stats['mean'].to(device)
+        std_vals = self.feature_stats['std'].to(device)
         
-        # Coordinates (0:4): min-max normalization to [0, 1]
-        coord_features = features[:, :4]
-        coord_min = self.feature_stats['min'][:4].to(device)
-        coord_max = self.feature_stats['max'][:4].to(device)
-        coord_range = (coord_max - coord_min).clamp(min=1e-6)
-        normalized[:, :4] = (coord_features - coord_min) / coord_range
-        
-        # Confidence (4): keep as is (already in [0, 1])
-        # Log area (5): z-score normalization
-        # Aspect ratio (6): z-score normalization
-        # Center coordinates (7:9): already normalized to [0, 1]
-        # Relative positions (9:11): already normalized to [-1, 1]
-        # Relative size (11): log transform then z-score
-        # Edge distance (12): already normalized to [0, 1]
-        
-        # Apply z-score normalization to specific features
-        zscore_indices = [5, 6]  # log_area, aspect_ratio
-        for idx in zscore_indices:
-            if idx < features.shape[1]:
-                mean_val = self.feature_stats['mean'][idx].to(device)
-                std_val = self.feature_stats['std'][idx].to(device)
-                normalized[:, idx] = (features[:, idx] - mean_val) / std_val
+        normalized = (features - mean_vals) / std_vals
         
         return normalized
     
