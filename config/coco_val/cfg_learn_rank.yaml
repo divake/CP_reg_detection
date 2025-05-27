@@ -73,6 +73,20 @@ MODEL:
   IOU_THRESH_TEST: 0.5
   LOCAL_CHECKPOINT: false
   NAME: Faster R-CNN X101-FPN
+# Learnable Scoring Function Configuration
+LEARNABLE_SCORING:
+  ENABLED: true
+  MODEL_PATH: learnable_scoring_fn/experiments/real_data_v1/best_model.pt
+  TRAIN_CONFIG:
+    NUM_EPOCHS: 100
+    BATCH_SIZE: 128
+    LEARNING_RATE: 0.001
+    HIDDEN_DIMS: [256, 128, 64]
+    DROPOUT_RATE: 0.15
+    TARGET_COVERAGE: 0.9
+    EFFICIENCY_WEIGHT: 0.05
+    CALIBRATION_WEIGHT: 0.1
+    EARLY_STOPPING_PATIENCE: 20
 PROJECT:
   CHECKPOINT_DIR: checkpoints
   CODE_DIR: conformalbb
@@ -80,4 +94,4 @@ PROJECT:
   OUTPUT_DIR: /ssd_4TB/divake/conformal-od/output
   PLOT_DIR: plots
   RESULTS_DIR: results
-  SEED: 6666666 
+  SEED: 6666666

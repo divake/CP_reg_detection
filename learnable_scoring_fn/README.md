@@ -1,119 +1,157 @@
 # Learnable Scoring Function for Conformal Object Detection
 
-This module implements a **learnable scoring function** for conformal prediction in object detection, following a clean separation between training and usage.
+This module implements a **regression-based learnable scoring function** that predicts interval widths for conformal prediction in object detection.
 
 ## 🎯 **Overview**
 
-Instead of using fixed scoring functions like `abs_res()`, this approach trains a neural network to learn optimal nonconformity scores that:
-- **Achieve target coverage** (90%) 
-- **Minimize prediction interval width**
-- **Adapt to different object types and features**
+### **Problem Statement**
+Traditional conformal prediction uses fixed scoring functions like `abs_res()` that don't adapt to prediction uncertainty. This can lead to either:
+- **Under-coverage**: Intervals too narrow for uncertain predictions
+- **Inefficiency**: Intervals too wide for confident predictions
+
+### **Solution: Regression-Based Scoring**
+We train a neural network to predict **adaptive interval widths** that:
+- **Achieve target coverage** (90%) by ensuring |gt - pred| <= width * tau
+- **Minimize prediction interval width** for efficiency  
+- **Adapt to prediction uncertainty** using both geometric and uncertainty features
+
+### **Key Innovation**
+- **Before**: Classification approach with score <= tau coverage
+- **After**: Regression approach with |residual| <= width * tau coverage
+- **Result**: Better coverage-efficiency trade-off through learned uncertainty estimation
 
 ## 📁 **Directory Structure**
 
 ```
 learnable_scoring_fn/
 ├── __init__.py              # Package initialization
-├── model.py                 # Neural network architecture & loss functions
-├── feature_utils.py         # Feature extraction & normalization  
-├── data_utils.py           # Data loading & preprocessing
-├── train_scoring.py        # Main training script
+├── model.py                 # RegressionScoringFunction class
+├── feature_utils.py         # FeatureExtractor class (17 features)
+├── data_utils.py           # Data loading & preprocessing utilities
+├── train.py                # Main training script (full pipeline)
+├── train_minimal.py        # Minimal training with synthetic data
 ├── run_training.py         # Simple training wrapper
-├── trained_models/         # Saved model checkpoints
-├── experiments/            # Training experiment outputs
-└── README.md               # This file
+├── experiments/            # Training results and cached data
+│   ├── cache/              # Cached predictions (real_predictions.pkl)
+│   ├── minimal_test/       # Synthetic data training results
+│   └── real_data_v1/       # Real data training results
+├── README.md               # This file
+├── memory.md               # Development memory and decisions
+└── TRAINING_SUMMARY.md     # Summary of training approach
 ```
 
 ## 🚀 **Quick Start**
 
-### 1. **Train the Scoring Function**
+### **Status: ✅ Proof of Concept Complete**
+The regression approach is validated with synthetic data achieving 90% coverage.
+
+### 1. **Test with Synthetic Data (Working)**
 
 ```bash
 cd /ssd_4TB/divake/conformal-od
 
-# Simple training with defaults
-python learnable_scoring_fn/run_training.py
-
-# Or with custom parameters
-python -m learnable_scoring_fn.train_scoring \
-  --config_file cfg_std_rank \
-  --subset_size 50000 \
-  --num_epochs 100 \
-  --target_coverage 0.9 \
-  --device cuda
+# Run minimal training to verify the approach
+/home/divake/miniconda3/envs/env_cu121/bin/python learnable_scoring_fn/train_minimal.py
 ```
 
-### 2. **Use Trained Model in Conformal Prediction**
+### 2. **Train with Real Data (Next Step)**
+
+```bash
+# First collect train predictions (time-intensive)
+/home/divake/miniconda3/envs/env_cu121/bin/python learnable_scoring_fn/train.py \
+  --config_file cfg_std_rank \
+  --config_path config/coco_val/
+
+# Or use simplified approach with val data split
+/home/divake/miniconda3/envs/env_cu121/bin/python learnable_scoring_fn/train_simplified.py
+```
+
+### 3. **Use Trained Model for Prediction Intervals**
 
 ```python
-# In your conformal prediction code
-from calibration.conformal_scores import learned_score
+from learnable_scoring_fn.model import RegressionScoringFunction
+import torch
 
-# Use like abs_res(), but with learned scoring
-score = learned_score(gt_coords, pred_coords, pred_scores)
+# Load trained model
+checkpoint = torch.load('experiments/minimal_test/best_model.pth')
+model = RegressionScoringFunction(input_dim=10, hidden_dims=[64, 32])
+model.load_state_dict(checkpoint['model_state_dict'])
+
+# Get interval widths
+widths = model(features)
+
+# Calculate prediction intervals
+tau = checkpoint['tau']
+lower_bounds = predictions - widths * tau
+upper_bounds = predictions + widths * tau
 ```
 
 ## 🔧 **Training Framework**
 
-The training follows your **classification framework pattern**:
+The training follows the **regression framework**:
 
 ### **Per-Epoch Training Loop**
 
 ```python
 for epoch in range(num_epochs):
-    # 1. Calibration Phase: Calculate tau using calibration set
-    tau = calculate_tau_per_class(model, cal_data, alpha=0.1)
+    # 1. Calibration Phase: Calculate tau from normalized residuals
+    widths = model(cal_features)
+    tau = quantile(|gt - pred| / widths, 0.9)
     
-    # 2. Training Phase: Train scoring function with FIXED tau
-    train_loss = train_epoch(model, train_data, tau)
+    # 2. Training Phase: Train to predict interval widths
+    losses = criterion(widths, gt_coords, pred_coords, tau)
     
-    # 3. Validation Phase: Evaluate with learned scores + current tau
-    coverage, width = validate_epoch(model, val_data, tau)
+    # 3. Validation Phase: Evaluate coverage and efficiency
+    coverage = P(|gt - pred| <= width * tau)
 ```
 
 ### **Key Features**
 
-- ✅ **Per-epoch tau calculation** like your classification approach
-- ✅ **Curriculum learning**: λ_width starts low (focus coverage) → increases (balance coverage/efficiency)  
-- ✅ **Stratified sampling**: 50k samples from top 6 COCO classes
-- ✅ **Hand-crafted features**: coordinates + confidence + 6 geometric features
-- ✅ **Same val/calib splits** as std method for fair comparison
+- ✅ **Regression-based**: Outputs interval widths, not classification scores
+- ✅ **Proper tau calculation**: From normalized residuals, not raw scores  
+- ✅ **Real predictions**: Uses actual model outputs from COCO validation
+- ✅ **Uncertainty features**: Incorporates prediction uncertainty indicators
+- ✅ **Calibration loss**: Ensures widths are proportional to errors
 
 ## 📊 **Input Features**
 
-The scoring function uses **13 input features**:
+The scoring function uses **17 input features**:
 
-| Feature Type | Features | Description |
-|-------------|----------|-------------|
-| **Coordinates** | x0, y0, x1, y1 | Predicted bounding box coordinates |
-| **Confidence** | pred_score | Model confidence score |
-| **Geometric** | log_area | Log-transformed box area |
-| | aspect_ratio | Width/height ratio |
-| | center_x, center_y | Normalized center coordinates |
-| | rel_pos_x, rel_pos_y | Position relative to image center |
-| | rel_size | Box size relative to image |
-| | edge_distance | Distance to nearest image edge |
+### Geometric Features (13)
+- **Coordinates**: x0, y0, x1, y1 (predicted box)
+- **Confidence**: Model confidence score
+- **Box properties**: log_area, aspect_ratio
+- **Position**: center_x, center_y (normalized)
+- **Relative**: rel_pos_x, rel_pos_y (from image center)
+- **Size**: rel_size (relative to image)
+- **Edge**: edge_distance (to nearest border)
+
+### Uncertainty Features (4)
+- **Confidence uncertainty**: 1 - confidence
+- **Ensemble uncertainty**: Standard deviation (if available)
+- **Expected error**: Based on confidence mapping
+- **Difficulty score**: Based on box size and aspect ratio
 
 ## 🏗️ **Model Architecture**
 
 ```python
-ScoringMLP(
-    input_dim=13,           # 13 input features
-    hidden_dims=[128, 64, 32],  # 3 hidden layers
-    output_dim=1,           # Single score output
-    dropout_rate=0.2        # Regularization
+RegressionScoringFunction(
+    input_dim=17,              # 17 input features
+    hidden_dims=[256, 128, 64], # 3 hidden layers
+    dropout_rate=0.15,         # Regularization
+    activation='relu'          # With batch normalization
 )
 ```
 
-**Loss Function:**
+**Loss Components:**
 ```python
-total_loss = coverage_loss + λ_width * width_loss
+total_loss = coverage_loss + λ_efficiency * efficiency_loss + λ_calibration * calibration_loss
 ```
 
 Where:
-- `coverage_loss = (actual_coverage - target_coverage)²`
-- `width_loss = normalized_interval_width`
-- `λ_width` follows curriculum: 0.01 → 0.1
+- `coverage_loss = (P(|gt-pred| <= width*tau) - 0.9)²`
+- `efficiency_loss = mean(widths) / mean(errors)`
+- `calibration_loss = std(errors / widths)`
 
 ## 📈 **Training Parameters**
 
@@ -133,13 +171,12 @@ Where:
 After training, you'll find:
 
 ```
-experiments/learnable_scoring_default/
+experiments/real_data_v1/
 ├── best_model.pt           # Best model checkpoint
-├── feature_stats.pt        # Feature normalization stats
-├── training_curves.png     # Loss/coverage/width plots
-├── training_metrics.json   # All training metrics
-├── config.json            # Training configuration
-└── checkpoints/           # Periodic checkpoints
+├── data_stats.pt          # Feature & error statistics
+├── training_results.png    # Comprehensive plots
+├── results.json           # All metrics and config
+└── training.log           # Detailed training log
 ```
 
 ## 🔗 **Integration**
@@ -224,12 +261,13 @@ Training logs are saved to the experiment directory. Check:
 
 ## 🚦 **What to Expect**
 
-After training, you should see:
-- **Coverage**: Converging to ~90%
-- **Width**: Decreasing over time (more efficient intervals)
-- **Loss**: Generally decreasing with some fluctuation
+After training with real data, you should see:
+- **Coverage**: Approaching 90% target
+- **Average Width**: Decreasing while maintaining coverage
+- **Tau**: Stabilizing as model learns appropriate widths
+- **Calibration STD**: Low values indicate well-calibrated intervals
 
-The trained model will then be automatically used when you call `learned_score()` in your conformal prediction pipeline!
+The model learns to predict wider intervals for uncertain predictions and narrower intervals for confident ones.
 
 ## 🎯 **Next Steps**
 
