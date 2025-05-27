@@ -1195,60 +1195,72 @@ def plot_main_results_efficiency(dataset="coco_val", to_file=True):
 
 def plot_baseline_comparison(dataset="coco_val", to_file=True):
     """
-    Plot comparison against baseline methods
+    Plot comparison of actual COCO results only (no fake data for other datasets)
     """
     configure_matplotlib_no_latex()
-    print(f"Plotting baseline comparison for dataset: {dataset}")
+    print(f"Plotting actual results comparison for dataset: {dataset}")
     
     output_dir = "/ssd_4TB/divake/conformal-od/output/plots"
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     
     try:
-        # Load baseline comparison data
-        datasets = ["COCO", "Cityscapes", "BDD100k"]
-        methods = ["AddBonf", "MultBonf", "AddMax", "MultMax", "Box-Std", "Box-Ens", "Box-CQR"]
-        col = ["#E63946", "#E63946", "#E63946", "#E63946", "#023047", "#023047", "#023047"]
+        # Load actual COCO results only
+        res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
+        methods = [("std", "abs"), ("ens", "norm"), ("cqr", "quant")]
+        method_names = ["Box-Std", "Box-Ens", "Box-CQR"]
+        colors = ["#E63946", "#219EBC", "#023047"]
         
-        # Create sample data for demonstration (replace with actual data loading)
-        sample_data = [
-            [100, 95, 90, 85, 80, 75, 70],  # COCO
-            [110, 105, 100, 95, 85, 80, 75],  # Cityscapes  
-            [120, 115, 110, 105, 90, 85, 80]   # BDD100k
-        ]
+        mpiw_values = []
         
-        fig, ax = plt.subplots(figsize=(7.5, 1.8))
-        bar_width = 0.2
-        dataset_spacing = 0.5
-        start_pos = 0.5
+        # Load actual MPIW values from CSV files
+        for method, score in methods:
+            csv_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
+            
+            if os.path.exists(csv_path):
+                df = pd.read_csv(csv_path)
+                # Use "mean class (selected)" row (index 4) for main results
+                row_idx = 4
+                if len(df) > row_idx:
+                    mpiw = df["mpiw"].iloc[row_idx]
+                    mpiw_values.append(mpiw)
+                    print(f"Loaded {method.upper()} MPIW: {mpiw:.2f}")
+                else:
+                    print(f"Warning: Not enough rows in {csv_path}")
+                    mpiw_values.append(0)
+            else:
+                print(f"Warning: File not found: {csv_path}")
+                mpiw_values.append(0)
         
-        for i, dat in enumerate(sample_data):
-            for j in range(len(methods)):
-                pos = start_pos + i * dataset_spacing + j * bar_width
-                data_value = dat[j]
-                ax.bar(pos, data_value, bar_width, alpha=0.8, color=col[j], 
-                      edgecolor="black", linewidth=0.5)
-            start_pos += bar_width * len(methods)
-        
-        ax.set_ylabel("MPIW (↓)", fontsize=12)
-        ax.set_yticks([60, 80, 100, 120])
-        ax.set_ylim(60, 125)
-        
-        # Set major ticks for datasets
-        major_ticks = np.array([1.15, 3.05, 4.95])
-        ax.set_xticks(major_ticks)
-        ax.set_xticklabels(datasets)
-        
-        plt.tight_layout()
-        
-        if to_file:
-            fname = os.path.join(output_dir, f"baseline_comparison_mpiw.png")
-            save_fig(fname[:-4])
-            print(f"Saved baseline comparison plot: {fname}")
-        
-        plt.show()
+        if len(mpiw_values) == 3 and all(v > 0 for v in mpiw_values):
+            fig, ax = plt.subplots(figsize=(4, 3))
+            
+            # Create bar plot with actual data
+            bars = ax.bar(method_names, mpiw_values, color=colors, alpha=0.8, 
+                         edgecolor="black", linewidth=0.5)
+            
+            # Add value labels on bars
+            for bar, value in zip(bars, mpiw_values):
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 1,
+                       f'{value:.1f}', ha='center', va='bottom', fontsize=10)
+            
+            ax.set_ylabel("MPIW (↓)", fontsize=12)
+            ax.set_title(f"Actual COCO Results Comparison", fontsize=12)
+            ax.set_ylim(0, max(mpiw_values) * 1.2)
+            
+            plt.tight_layout()
+            
+            if to_file:
+                fname = os.path.join(output_dir, f"actual_coco_results_comparison.png")
+                save_fig(fname[:-4])
+                print(f"Saved actual COCO results comparison: {fname}")
+            
+            plt.show()
+        else:
+            print("Error: Could not load all required MPIW values from actual results")
         
     except Exception as e:
-        print(f"Warning: Could not generate baseline comparison: {e}")
+        print(f"Error generating actual results comparison: {e}")
 
 def plot_ablation_coverage_levels(dataset="coco_val", to_file=True):
     """
@@ -1335,24 +1347,46 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
     colors = {"Classif.":"#023047", "Misclassif.":"#E63946"}
     markers = {"Box-Std":"o", "Box-Ens":"*", "Box-CQR":"^"}
     
-    # Sample data (replace with actual data loading)
-    lcov_cl = [0.99, 0.995, 0.992]
-    lcov_miscl = [0.985, 0.99, 0.988]
-    leff_cl = [2.1, 2.3, 2.5]
-    leff_miscl = [2.8, 3.1, 3.0]
-    bcov_cl = [0.94, 0.945, 0.943]
-    bcov_miscl = [0.935, 0.94, 0.938]
-    beff_cl = [85, 88, 90]
-    beff_miscl = [95, 98, 100]
+    # Load actual data from CSV files
+    lcov_cl, lcov_miscl = [], []
+    leff_cl, leff_miscl = [], []
+    bcov_cl, bcov_miscl = [], []
+    beff_cl, beff_miscl = [], []
     
-    # Coverage scatter plot
-    fig, ax = plt.subplots(figsize=(2, 2))
+    row = 4  # mean class (selected)
     
-    for i, m in enumerate(markers.keys()):
-        ax.scatter(lcov_cl[i], bcov_cl[i], color=colors["Classif."], 
-                  marker=markers[m], alpha=0.8, label=m, linewidth=1, s=48)
-        ax.scatter(lcov_miscl[i], bcov_miscl[i], color=colors["Misclassif."], 
-                  marker=markers[m], alpha=0.8, linewidth=1, s=48)
+    # Load data for each method
+    for method, score in methods:
+        label_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_label_table.csv"
+        box_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
+        
+        # Load label data
+        if os.path.exists(label_path):
+            df = pd.read_csv(label_path)
+            if len(df) > row:
+                lcov_cl.append(df["cov set cl"].iloc[row])
+                lcov_miscl.append(df["cov set miscl"].iloc[row])
+                leff_cl.append(df["mean set size cl"].iloc[row])
+                leff_miscl.append(df["mean set size miscl"].iloc[row])
+        
+        # Load box data
+        if os.path.exists(box_path):
+            df = pd.read_csv(box_path)
+            if len(df) > row:
+                bcov_cl.append(df["cov box cl"].iloc[row])
+                bcov_miscl.append(df["cov box miscl"].iloc[row])
+                beff_cl.append(df["mpiw cl"].iloc[row])
+                beff_miscl.append(df["mpiw miscl"].iloc[row])
+    
+    if len(lcov_cl) == 3 and len(bcov_cl) == 3:  # All data loaded successfully
+        # Coverage scatter plot
+        fig, ax = plt.subplots(figsize=(2, 2))
+        
+        for i, m in enumerate(markers.keys()):
+            ax.scatter(lcov_cl[i], bcov_cl[i], color=colors["Classif."], 
+                      marker=markers[m], alpha=0.8, label=m, linewidth=1, s=48)
+            ax.scatter(lcov_miscl[i], bcov_miscl[i], color=colors["Misclassif."], 
+                      marker=markers[m], alpha=0.8, linewidth=1, s=48)
     
     ax.set_ylabel('Box cov.', fontsize=10)
     ax.set_xlabel('Label cov.', fontsize=10)
@@ -1390,7 +1424,9 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
         save_fig(fname[:-4])
         print(f"Saved misclassification efficiency plot: {fname}")
     
-    plt.show()
+        plt.show()
+    else:
+        print(f"Warning: Could not load all required CSV files for misclassification analysis. Found {len(lcov_cl)} label files and {len(bcov_cl)} box files out of 3 expected.")
 
 def plot_caption_lines(to_file=True):
     """
