@@ -17,9 +17,9 @@ def compare_coverage_values(dataset="coco_val"):
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     
     # Methods to analyze
-    methods = ["std", "ens", "cqr"]
-    method_names = ["Box-Std", "Box-Ens", "Box-CQR"]
-    res_types = ["abs_res", "norm_res", "quant_res"]
+    methods = ["std", "ens", "cqr", "learn"]
+    method_names = ["Box-Std", "Box-Ens", "Box-CQR", "Box-Learn"]
+    res_types = ["abs_res", "norm_res", "quant_res", "learned_res"]
     
     # Store results
     csv_coverage = {}
@@ -188,7 +188,7 @@ def compare_coverage_values(dataset="coco_val"):
         print(f"\nSaved comparison plot to {output_file}")
         
         # Create a more detailed plot showing all size categories
-        fig, axes = plt.subplots(nrows=len(methods), figsize=(12, 12), sharex=True)
+        fig, axes = plt.subplots(nrows=len(methods), figsize=(12, 16), sharex=True)
         
         categories = ['all', 'small', 'medium', 'large']
         category_labels = ['All', 'Small', 'Medium', 'Large']
@@ -239,7 +239,7 @@ def compare_coverage_values(dataset="coco_val"):
         # Create a plot showing the discrepancy across trials
         if discrepancy_data:
             # Create a plot for each method showing the distribution of tensor coverage values
-            fig, axes = plt.subplots(nrows=len(methods), figsize=(12, 12), sharex=True)
+            fig, axes = plt.subplots(nrows=len(methods), figsize=(12, 16), sharex=True)
             
             for i, method in enumerate(methods):
                 if method in tensor_coverage:

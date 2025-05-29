@@ -70,6 +70,6 @@ def save_tensor(file, filename: str, filedir: str, **kwargs):
 
 def load_tensor(filename: str, filedir: str, **kwargs):
     filepath = os.path.join(filedir, filename + ".pt")
-    file = torch.load(filepath, **kwargs)
-    print(f"Loaded torch tensor from {filepath}.")
+    file = torch.load(filepath, weights_only=False, **kwargs)
+    pass  # Tensor loaded
     return file
