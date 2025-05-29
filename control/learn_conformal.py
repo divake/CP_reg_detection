@@ -53,10 +53,16 @@ class LearnConformal(RiskControl):
         # Learnable scoring model path (can be configured)
         self.learnable_model_path = getattr(args, 'learnable_model_path', None)
         
+        # If not provided via args, check config file
+        if self.learnable_model_path is None and hasattr(cfg, 'LEARNABLE_SCORING') and hasattr(cfg.LEARNABLE_SCORING, 'MODEL_PATH'):
+            self.learnable_model_path = cfg.LEARNABLE_SCORING.MODEL_PATH
+        
         # Log that we're using learnable scoring
         self.logger.info("Initialized LearnConformal with learnable scoring function")
         if self.learnable_model_path:
             self.logger.info(f"Using learnable model from: {self.learnable_model_path}")
+        else:
+            self.logger.info("No specific learnable model path provided, will use default path")
 
     def set_collector(self, nr_class: int, nr_img: int, dict_fields: list = []):
         """Set a LearnConformalDataCollector instance."""
@@ -70,13 +76,9 @@ class LearnConformal(RiskControl):
         """Generates model prediction for given image(s)."""
         model.eval()  # Set model to evaluation mode
         with torch.no_grad():
-            pred = model(img)
-            
-            # Ensure pred is a list for consistent handling
-            if not isinstance(pred, list):
-                pred = [pred]
+            pred = model([img])
                 
-        return pred
+        return pred[0]["instances"]
 
     def collect_predictions(self, model, dataloader, verbose: bool = False):
         """Generates predictions for given dataloader and passes to data collection."""

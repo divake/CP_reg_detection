@@ -545,7 +545,9 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     
     # Check if learn method files exist before loading model
     learn_available = False
-    learn_control_file = os.path.join(filedir_learn, f"{file_name_prefix_learn}_control.pt")
+    # Fix the file prefix for learn method - files are saved as learn_conf_x101fpn_* not learn_conf_x101fpn_learn_rank_class_*
+    actual_learn_prefix = "learn_conf_x101fpn"
+    learn_control_file = os.path.join(filedir_learn, f"{actual_learn_prefix}_control.pt")
     if os.path.exists(learn_control_file):
         try:
             cfg_model_learn, model_learn = model_loader.d2_build_model(cfg_learn, logger=logger)
@@ -589,9 +591,9 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     # Load learn data only if available
     if learn_available:
         try:
-            control_data_learn = io_file.load_tensor(f"{file_name_prefix_learn}_control", filedir_learn)
-            test_indices_learn = io_file.load_tensor(f"{file_name_prefix_learn}_test_idx", filedir_learn)
-            label_data_learn = io_file.load_tensor(f"{file_name_prefix_learn}_label", filedir_learn)
+            control_data_learn = io_file.load_tensor(f"{actual_learn_prefix}_control", filedir_learn)
+            test_indices_learn = io_file.load_tensor(f"{actual_learn_prefix}_test_idx", filedir_learn)
+            label_data_learn = io_file.load_tensor(f"{actual_learn_prefix}_label", filedir_learn)
         except Exception as e:
             pass  # Learn method data not available
             learn_available = False
@@ -680,12 +682,22 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
 
     # Generate learn predictions only if data is available
     if learn_available:
-        loggy.info(f"\n------ Method: {args_learn.risk_control} ------")
-        gt_learn, pred_match_learn, box_quant_learn, box_quant_true_learn, lab_gt_learn, lab_pred_learn, lab_set_learn = get_pred(
-            args_learn, controller_learn, model_learn, img, img_id, idx, filter_for_class, filter_for_set, 
-            class_name, set_name, set_idx, control_data_learn, label_data_learn, i, j, metr, label_metr, 
-            coco_classes, loggy, metadata
-        )
+        try:
+            loggy.info(f"\n------ Method: {args_learn.risk_control} ------")
+            gt_learn, pred_match_learn, box_quant_learn, box_quant_true_learn, lab_gt_learn, lab_pred_learn, lab_set_learn = get_pred(
+                args_learn, controller_learn, model_learn, img, img_id, idx, filter_for_class, filter_for_set, 
+                class_name, set_name, set_idx, control_data_learn, label_data_learn, i, j, metr, label_metr, 
+                coco_classes, loggy, metadata
+            )
+        except Exception as e:
+            # If learn prediction fails, report the error and skip learn method
+            loggy.info(f"\n------ Method: learn_conf (ERROR: {str(e)}) ------")
+            gt_learn = pred_match_learn = box_quant_learn = box_quant_true_learn = None
+            lab_gt_learn = lab_pred_learn = lab_set_learn = None
+            learn_available = False
+            print(f"Error in learn method: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         loggy.info(f"\n------ Method: learn_conf (SKIPPED - no data available) ------")
         gt_learn = pred_match_learn = box_quant_learn = box_quant_true_learn = None
@@ -736,48 +748,7 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     else:
         pass  # Learn method not available
     
-    # Optional: plot with oracle quantiles
-    if to_file:
-        # Create filenames for oracle plots
-        output_fname_std_oracle = os.path.join(output_plots_dir, f"{args_std.risk_control}_oracle_{cn}_img{img_id}.jpg")
-        output_fname_ens_oracle = os.path.join(output_plots_dir, f"{args_ens.risk_control}_oracle_{cn}_img{img_id}.jpg")
-        output_fname_cqr_oracle = os.path.join(output_plots_dir, f"{args_cqr.risk_control}_oracle_{cn}_img{img_id}.jpg")
-
-        pass  # Oracle plot for standard method
-        plot_util.d2_plot_pi(args_std.risk_control, img, gt_std.gt_boxes, pred_match_std, box_quant_true_std,
-                            channels, draw_labels=[], 
-                            colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
-                            lw=1.5, notebook=True, to_file=to_file,
-                            filename=output_fname_std_oracle,
-                            label_gt=lab_gt_std, label_set=lab_set_std)
-
-        pass  # Oracle plot for ensemble method
-        plot_util.d2_plot_pi(args_ens.risk_control, img, gt_ens.gt_boxes, pred_match_ens, box_quant_true_ens,
-                            channels, draw_labels=[], 
-                            colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
-                            lw=1.5, notebook=True, to_file=to_file,
-                            filename=output_fname_ens_oracle,
-                            label_gt=lab_gt_ens, label_set=lab_set_ens)
-
-        pass  # Oracle plot for CQR method
-        plot_util.d2_plot_pi(args_cqr.risk_control, img, gt_cqr.gt_boxes, pred_match_cqr, box_quant_true_cqr,
-                            channels, draw_labels=[], 
-                            colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
-                            lw=1.5, notebook=True, to_file=to_file,
-                            filename=output_fname_cqr_oracle,
-                            label_gt=lab_gt_cqr, label_set=lab_set_cqr)
-
-        if learn_available:
-            output_fname_learn_oracle = os.path.join(output_plots_dir, f"{args_learn.risk_control}_oracle_{cn}_img{img_id}.jpg")
-            pass  # Oracle plot for learn method
-            plot_util.d2_plot_pi(args_learn.risk_control, img, gt_learn.gt_boxes, pred_match_learn, box_quant_true_learn,
-                                channels, draw_labels=[], 
-                                colors=["red", "green", "palegreen"], alpha=[1.0, 0.6, 0.4],
-                                lw=1.5, notebook=True, to_file=to_file,
-                                filename=output_fname_learn_oracle,
-                                label_gt=lab_gt_learn, label_set=lab_set_learn)
-        else:
-            pass  # Learn oracle plot not available
+    # No oracle plots needed - only class_threshold plots
     
     # Print the output paths
     pass  # Plots saved successfully
