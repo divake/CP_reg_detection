@@ -107,6 +107,11 @@ def d2_plot_pi(
         boxes, box_ids, box_colors = _get_boxes_cqr(
             gt_box, pred, quant, img_h, img_w, colors[:2]
         )
+    elif risk_control == "learn_conf":
+        # Use the same box processing as std_conf for learn method
+        boxes, box_ids, box_colors = _get_boxes_std(
+            gt_box, pred, quant, img_h, img_w, colors[:2]
+        )
     else:
         raise ValueError("Invalid risk control procedure.")
 
