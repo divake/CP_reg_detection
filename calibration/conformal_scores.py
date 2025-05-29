@@ -51,7 +51,7 @@ def load_trained_scoring_model(model_path: str = None):
     
     # Use default path if not specified
     if model_path is None:
-        model_path = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/trained_models/best_model.pt"
+        model_path = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/experiments/real_data_v1/best_model.pt"
     
     # Load model if not cached or path changed
     if (_trained_scoring_model is None or 
