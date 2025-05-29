@@ -189,3 +189,6 @@ plots/coco_val/
 plots/learnable_method_comparison/
 CLAUDE.md
 learnable_scoring_fn/experiments/*
+README.md
+learnable_scoring_fn/memory.md
+learnable_scoring_fn/README.md
