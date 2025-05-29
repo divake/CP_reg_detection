@@ -31,6 +31,7 @@ def one_sided_mult_res(gt: torch.Tensor, pred: torch.Tensor, mult: torch.Tensor,
 # Global cache for trained model
 _trained_scoring_model = None
 _trained_feature_extractor = None
+_trained_uncertainty_extractor = None
 _model_path = None
 
 
@@ -44,8 +45,9 @@ def load_trained_scoring_model(model_path: str = None):
     Returns:
         model: Loaded ScoringMLP model
         feature_extractor: Loaded FeatureExtractor
+        uncertainty_extractor: Loaded UncertaintyFeatureExtractor
     """
-    global _trained_scoring_model, _trained_feature_extractor, _model_path
+    global _trained_scoring_model, _trained_feature_extractor, _trained_uncertainty_extractor, _model_path
     
     # Use default path if not specified
     if model_path is None:
@@ -54,34 +56,53 @@ def load_trained_scoring_model(model_path: str = None):
     # Load model if not cached or path changed
     if (_trained_scoring_model is None or 
         _trained_feature_extractor is None or 
+        _trained_uncertainty_extractor is None or 
         _model_path != model_path):
         
         try:
             # Import here to avoid circular dependencies
-            from learnable_scoring_fn.model import load_model
+            from learnable_scoring_fn.model import load_regression_model, UncertaintyFeatureExtractor
             from learnable_scoring_fn.feature_utils import FeatureExtractor
             
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
             # Load model checkpoint
-            model, optimizer, checkpoint = load_model(model_path, device)
+            model, checkpoint = load_regression_model(model_path, device)
             
             # Create and load feature extractor
             feature_extractor = FeatureExtractor()
+            
+            # Create and load uncertainty feature extractor
+            uncertainty_extractor = UncertaintyFeatureExtractor()
+            
             if 'feature_stats' in checkpoint and checkpoint['feature_stats'] is not None:
                 feature_extractor.feature_stats = checkpoint['feature_stats']
             else:
-                # Try to load from separate feature stats file
+                # Try to load from separate data stats file (contains feature_stats)
                 import os
+                data_stats_path = os.path.join(os.path.dirname(model_path), 'data_stats.pt')
                 feature_stats_path = os.path.join(os.path.dirname(model_path), 'feature_stats.pt')
-                if os.path.exists(feature_stats_path):
+                
+                if os.path.exists(data_stats_path):
+                    data_stats = torch.load(data_stats_path, map_location=device)
+                    if 'feature_stats' in data_stats:
+                        feature_extractor.feature_stats = data_stats['feature_stats']
+                    else:
+                        raise FileNotFoundError(f"Feature stats not found in data_stats.pt")
+                    
+                    # Load error stats for uncertainty extractor
+                    if 'error_stats' in data_stats:
+                        uncertainty_extractor.error_stats = data_stats['error_stats']
+                        
+                elif os.path.exists(feature_stats_path):
                     feature_extractor.load_stats(feature_stats_path)
                 else:
-                    raise FileNotFoundError(f"Feature stats not found in checkpoint or at {feature_stats_path}")
+                    raise FileNotFoundError(f"Feature stats not found in checkpoint, data_stats.pt, or feature_stats.pt")
             
-            # Cache the loaded model and extractor
+            # Cache the loaded model and extractors
             _trained_scoring_model = model
             _trained_feature_extractor = feature_extractor
+            _trained_uncertainty_extractor = uncertainty_extractor
             _model_path = model_path
             
             print(f"Loaded trained scoring model from {model_path}")
@@ -89,9 +110,9 @@ def load_trained_scoring_model(model_path: str = None):
         except Exception as e:
             print(f"Error loading trained scoring model: {e}")
             print("Falling back to absolute residual scoring...")
-            return None, None
+            return None, None, None
     
-    return _trained_scoring_model, _trained_feature_extractor
+    return _trained_scoring_model, _trained_feature_extractor, _trained_uncertainty_extractor
 
 
 def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor = None, 
@@ -117,10 +138,13 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         raise ValueError("pred_score is required for learned scoring function")
     
     # Load trained model
-    model, feature_extractor = load_trained_scoring_model(model_path)
+    model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path)
     
-    if model is None or feature_extractor is None:
+    if model is None or feature_extractor is None or uncertainty_extractor is None:
         raise RuntimeError("Failed to load trained scoring model")
+    
+    # Set model to evaluation mode to fix batch normalization issue
+    model.eval()
     
     device = next(model.parameters()).device
     
@@ -152,9 +176,17 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         pred_coords = pred_coords.to(device)
         pred_scores = pred_scores.to(device)
         
-        # Extract features and get learned nonconformity score
-        features = feature_extractor.extract_features(pred_coords, pred_scores)
-        normalized_features = feature_extractor.normalize_features(features)
+        # Extract geometric features (13 dimensions)
+        geometric_features = feature_extractor.extract_features(pred_coords, pred_scores)
+        
+        # Extract uncertainty features (4 dimensions)
+        uncertainty_features = uncertainty_extractor.extract_uncertainty_features(pred_coords, pred_scores)
+        
+        # Combine features to get 17 dimensions total
+        combined_features = torch.cat([geometric_features, uncertainty_features], dim=1)
+        
+        # Normalize combined features
+        normalized_features = feature_extractor.normalize_features(combined_features)
         
         with torch.no_grad():
             learned_nonconf_score = model(normalized_features).squeeze()  # scalar or [1]
@@ -188,9 +220,17 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         pred_tensor = pred_tensor.to(device)
         score_tensor = score_tensor.to(device)
         
-        # Extract features and get learned nonconformity scores
-        features = feature_extractor.extract_features(pred_tensor, score_tensor)
-        normalized_features = feature_extractor.normalize_features(features)
+        # Extract geometric features (13 dimensions)
+        geometric_features = feature_extractor.extract_features(pred_tensor, score_tensor)
+        
+        # Extract uncertainty features (4 dimensions)
+        uncertainty_features = uncertainty_extractor.extract_uncertainty_features(pred_tensor, score_tensor)
+        
+        # Combine features to get 17 dimensions total
+        combined_features = torch.cat([geometric_features, uncertainty_features], dim=1)
+        
+        # Normalize combined features
+        normalized_features = feature_extractor.normalize_features(combined_features)
         
         with torch.no_grad():
             learned_nonconf_scores = model(normalized_features).squeeze()  # [N]
@@ -221,9 +261,9 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
         scores_batch: Learned nonconformity scores [N]
     """
     # Load model once for the entire batch
-    model, feature_extractor = load_trained_scoring_model(model_path)
+    model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path)
     
-    if model is None or feature_extractor is None:
+    if model is None or feature_extractor is None or uncertainty_extractor is None:
         raise RuntimeError("Failed to load trained scoring model for batch processing")
     
     device = next(model.parameters()).device
@@ -233,9 +273,17 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
     pred_score_batch = pred_score_batch.to(device)
     gt_batch = gt_batch.to(device)
     
-    # Extract and normalize features
-    features = feature_extractor.extract_features(pred_batch, pred_score_batch)
-    normalized_features = feature_extractor.normalize_features(features)
+    # Extract geometric features (13 dimensions)
+    geometric_features = feature_extractor.extract_features(pred_batch, pred_score_batch)
+    
+    # Extract uncertainty features (4 dimensions)
+    uncertainty_features = uncertainty_extractor.extract_uncertainty_features(pred_batch, pred_score_batch)
+    
+    # Combine features to get 17 dimensions total
+    combined_features = torch.cat([geometric_features, uncertainty_features], dim=1)
+    
+    # Normalize combined features
+    normalized_features = feature_extractor.normalize_features(combined_features)
     
     # Get learned scores
     with torch.no_grad():
@@ -264,7 +312,7 @@ def get_available_scoring_functions():
 
 def is_learned_model_available(model_path: str = None):
     """Check if trained model is available and loadable."""
-    model, feature_extractor = load_trained_scoring_model(model_path)
-    if model is None or feature_extractor is None:
+    model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path)
+    if model is None or feature_extractor is None or uncertainty_extractor is None:
         raise RuntimeError(f"Trained scoring model not available at path: {model_path}")
     return True
