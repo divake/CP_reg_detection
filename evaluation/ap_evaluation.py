@@ -138,7 +138,7 @@ class APEvaluator:
                 # check if iou_max above threshold
                 # if yes then mark gt as TP matched with iou_max_idx
                 if iou_max >= iou_thresh:
-                    gt_match_idx[j] = iou_max_idx
+                    gt_match_idx[j] = iou_max_idx[0] if iou_max_idx.numel() > 0 else -1
 
             # Mark TP and FP
             tp[gt_match_idx[gt_match_idx != -1]] = 1

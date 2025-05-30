@@ -1,6 +1,8 @@
 import os
 import torch
 from tqdm import tqdm
+import pickle
+from pathlib import Path
 
 from detectron2.structures.boxes import Boxes
 from detectron2.data.detection_utils import annotations_to_instances
@@ -67,7 +69,7 @@ class StdConformal(RiskControl):
             pred = model([img])
         return pred[0]["instances"]
 
-    def collect_predictions(self, model, dataloader, verbose: bool = False):
+    def collect_predictions(self, model, dataloader, verbose: bool = False, checkpoint_dir=None, checkpoint_freq=0.1):
         """
         Cycles through the dataloader containing the full eval dataset
         and collects information on model predictions and matched
@@ -77,6 +79,8 @@ class StdConformal(RiskControl):
             model (torch.nn.Module): Loaded model
             dataloader (torch.data.DataLoader): Dataloader for full dataset
             verbose (bool, optional): Defaults to False.
+            checkpoint_dir (str, optional): Directory to save checkpoints
+            checkpoint_freq (float, optional): Save checkpoint every X% of progress (default 0.1 = 10%)
 
         Returns:
             img_list (list), ist_list (list)
@@ -88,9 +92,39 @@ class StdConformal(RiskControl):
             """
         )
 
+        # Check for existing checkpoint
+        start_idx = 0
+        if checkpoint_dir:
+            checkpoint_path = Path(checkpoint_dir) / "collection_checkpoint.pkl"
+            if checkpoint_path.exists():
+                self.logger.info(f"Loading checkpoint from {checkpoint_path}")
+                try:
+                    with open(checkpoint_path, 'rb') as f:
+                        checkpoint_data = pickle.load(f)
+                        start_idx = checkpoint_data['last_idx'] + 1
+                        self.collector = checkpoint_data['collector']
+                        if hasattr(self, 'ap_evaluator') and 'ap_evaluator' in checkpoint_data:
+                            self.ap_evaluator = checkpoint_data['ap_evaluator']
+                        self.logger.info(f"Resuming from index {start_idx}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to load checkpoint: {e}. Starting from scratch.")
+                    start_idx = 0
+
+        total_images = len(dataloader)
+        checkpoint_interval = int(total_images * checkpoint_freq) if checkpoint_freq > 0 else total_images
+
         model.eval()
-        with torch.no_grad(), tqdm(dataloader, desc="Images") as loader:
-            for i, img in enumerate(loader):
+        actual_idx = 0
+        with torch.no_grad(), tqdm(dataloader, desc="Images", total=total_images) as loader:
+            for batch_idx, img in enumerate(loader):
+                # Skip already processed images
+                if actual_idx < start_idx:
+                    actual_idx += 1
+                    continue
+                    
+                # Update progress bar position
+                loader.n = actual_idx
+                loader.refresh()
                 # BoxMode.XYWH to BoxMode.XYXY and correct formatting
                 gt = annotations_to_instances(
                     img[0]["annotations"], (img[0]["height"], img[0]["width"])
@@ -142,7 +176,7 @@ class StdConformal(RiskControl):
                         pred_score,
                         pred_score_all,
                         pred_logits_all,
-                        img_id=i,
+                        img_id=actual_idx,
                     )
 
                 if self.log is not None:
@@ -153,11 +187,34 @@ class StdConformal(RiskControl):
                     self.logger.info(f"\n{gt_class=}\n{pred_class=},\n{pred_score=}")
 
                 del gt, pred, pred_ist
+                
+                # Save checkpoint at specified intervals
+                if checkpoint_dir and actual_idx > 0 and ((actual_idx + 1) % checkpoint_interval == 0 or actual_idx == total_images - 1):
+                    checkpoint_path = Path(checkpoint_dir) / "collection_checkpoint.pkl"
+                    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+                    checkpoint_data = {
+                        'last_idx': actual_idx,
+                        'collector': self.collector,
+                        'ap_evaluator': self.ap_evaluator if hasattr(self, 'ap_evaluator') else None
+                    }
+                    with open(checkpoint_path, 'wb') as f:
+                        pickle.dump(checkpoint_data, f)
+                    self.logger.info(f"Saved checkpoint at index {actual_idx} ({((actual_idx+1)/total_images)*100:.1f}% complete)")
+                
+                actual_idx += 1
 
         if self.ap_eval:
             self.ap_evaluator.to_file(
                 self.ap_evaluator.ap_info, "ap_info", self.filedir
             )
+            
+        # Clean up checkpoint after successful completion
+        if checkpoint_dir:
+            checkpoint_path = Path(checkpoint_dir) / "collection_checkpoint.pkl"
+            if checkpoint_path.exists():
+                checkpoint_path.unlink()
+                self.logger.info("Removed checkpoint file after successful completion")
+                
         return self.collector.img_list, self.collector.ist_list
 
     def __call__(self, img_list: list, ist_list: list):
