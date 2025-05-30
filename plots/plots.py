@@ -902,17 +902,17 @@ def plot_coverage_violin(dataset="coco_val", to_file=True):
         res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
         if method == "learn":
             method_folder = "learn_conf_x101fpn_learn_rank_class"
-            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_control.pt")
+            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_box_set.pt")
         else:
             method_folder = f"{method}_conf_x101fpn_{method}_rank_class"
-            control_file = os.path.join(res_folder, method_folder, f"{method_folder}_control.pt")
+            control_file = os.path.join(res_folder, method_folder, f"{method_folder}_box_set.pt")
         
         if os.path.exists(control_file):
-            pass  # Loading control data
+            pass  # Loading box_set data
             try:
                 control_data = torch.load(control_file, map_location='cpu', weights_only=False)
             except Exception as e:
-                pass  # Control file not available
+                pass  # Box_set file not available
                 control_data = None
             
             if control_data is not None:
@@ -1066,13 +1066,13 @@ def plot_mpiw_violin(dataset="coco_val", to_file=True):
         res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
         if method == "learn":
             method_folder = "learn_conf_x101fpn_learn_rank_class"
-            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_control.pt")
+            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_box_set.pt")
         else:
             method_folder = f"{method}_conf_x101fpn_{method}_rank_class"
-            control_file = os.path.join(res_folder, method_folder, f"{method_folder}_control.pt")
+            control_file = os.path.join(res_folder, method_folder, f"{method_folder}_box_set.pt")
         
         if os.path.exists(control_file):
-            pass  # Loading control data
+            pass  # Loading box_set data
             try:
                 control_data = torch.load(control_file, map_location='cpu', weights_only=False)
                 
