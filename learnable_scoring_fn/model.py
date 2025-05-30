@@ -382,7 +382,16 @@ def load_regression_model(filepath: str, device: torch.device = None) -> Tuple:
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    checkpoint = torch.load(filepath, map_location=device)
+    # Load checkpoint with map_location to handle device placement properly
+    try:
+        checkpoint = torch.load(filepath, map_location=device)
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower() and device.type == "cuda":
+            print(f"GPU out of memory while loading checkpoint, retrying on CPU...")
+            device = torch.device("cpu")
+            checkpoint = torch.load(filepath, map_location=device)
+        else:
+            raise
     
     # Recreate model from config
     model_config = checkpoint['model_config']

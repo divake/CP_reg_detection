@@ -53,12 +53,22 @@ def set_device(cfg: dict, device: str, logger):
         pass
     elif (device == "cpu") and gpu_avail:
         logger.info("'cpu' requested but 'cuda' is available.")
-    elif (device == "cuda") and (not gpu_avail):
-        logger.info("'cuda' requested but not available, using 'cpu' instead.")
+    elif device.startswith("cuda") and (not gpu_avail):
+        logger.info(f"'{device}' requested but not available, using 'cpu' instead.")
         device = "cpu"
-    elif (device == "cuda") and gpu_avail:
-        logger.info(f"Using 'cuda', {torch.cuda.device_count()} devices available.")
-        logger.info(f"Using GPU {torch.cuda.get_device_name()}.")
+    elif device.startswith("cuda") and gpu_avail:
+        # Check if specific GPU is requested (e.g., cuda:1)
+        if ":" in device:
+            gpu_id = int(device.split(":")[1])
+            if gpu_id < torch.cuda.device_count():
+                logger.info(f"Using '{device}', {torch.cuda.device_count()} devices available.")
+                logger.info(f"Using GPU {torch.cuda.get_device_name(gpu_id)}.")
+            else:
+                logger.info(f"GPU {gpu_id} not available. Using default cuda device.")
+                device = "cuda"
+        else:
+            logger.info(f"Using 'cuda', {torch.cuda.device_count()} devices available.")
+            logger.info(f"Using GPU {torch.cuda.get_device_name()}.")
 
     cfg.MODEL.DEVICE = device
     cfg.MODEL.CONFIG.MODEL.DEVICE = device

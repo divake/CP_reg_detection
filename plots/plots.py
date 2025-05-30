@@ -149,7 +149,7 @@ def save_fig(figname: str, **kwargs):
     pass  # Figure saved
     plt.close()  # Close the figure to free memory
 
-def setup_model_and_data(rc="std", d="coco_val", device="cuda"):
+def setup_model_and_data(rc="std", d="coco_val", device="cuda:1"):
     """Setup model and data based on configuration"""
     # simulate CLI with fixed parameters (see main.py for definitions)
     args_dict = {
@@ -545,8 +545,8 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     
     # Check if learn method files exist before loading model
     learn_available = False
-    # Fix the file prefix for learn method - files are saved as learn_conf_x101fpn_* not learn_conf_x101fpn_learn_rank_class_*
-    actual_learn_prefix = "learn_conf_x101fpn"
+    # The learn method files are saved with full prefix
+    actual_learn_prefix = "learn_conf_x101fpn_learn_rank_class"
     learn_control_file = os.path.join(filedir_learn, f"{actual_learn_prefix}_control.pt")
     if os.path.exists(learn_control_file):
         try:
@@ -753,7 +753,7 @@ def plot_multi_method_comparison(img_name="000000054593", class_name="person", d
     # Print the output paths
     pass  # Plots saved successfully
 
-def plot_coverage_histogram(class_name="person", dataset="coco_val", device="cuda", rc="std", to_file=True):
+def plot_coverage_histogram(class_name="person", dataset="coco_val", device="cuda:1", rc="std", to_file=True):
     """
     Plot empirical coverage histogram over number of trials for a specific class
     """
@@ -902,7 +902,7 @@ def plot_coverage_violin(dataset="coco_val", to_file=True):
         res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
         if method == "learn":
             method_folder = "learn_conf_x101fpn_learn_rank_class"
-            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_box_set.pt")
+            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_learn_rank_class_box_set.pt")
         else:
             method_folder = f"{method}_conf_x101fpn_{method}_rank_class"
             control_file = os.path.join(res_folder, method_folder, f"{method_folder}_box_set.pt")
@@ -1066,7 +1066,7 @@ def plot_mpiw_violin(dataset="coco_val", to_file=True):
         res_folder = f"/ssd_4TB/divake/conformal-od/output/{dataset}"
         if method == "learn":
             method_folder = "learn_conf_x101fpn_learn_rank_class"
-            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_box_set.pt")
+            control_file = os.path.join(res_folder, method_folder, "learn_conf_x101fpn_learn_rank_class_box_set.pt")
         else:
             method_folder = f"{method}_conf_x101fpn_{method}_rank_class"
             control_file = os.path.join(res_folder, method_folder, f"{method_folder}_box_set.pt")
@@ -1157,8 +1157,8 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
     # Load data for each method
     for method, score in methods:
         if method == "learn":
-            label_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_label_table.csv"
-            box_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_box_set_table_{score}_res.csv"
+            label_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_label_table.csv"
+            box_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_box_set_table_{score}_res.csv"
         else:
             label_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_label_table.csv"
             box_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
@@ -1213,7 +1213,7 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
         
         ax.set_ylabel(r'Box cov.', fontsize=10)
         ax.set_xlabel(r'Label cov.', fontsize=10)
-        ax.set_ylim(0.92, 0.96)
+        ax.set_ylim(0.84, 0.96)
         ax.set_xlim(0.98, 1.01)
         ax.legend()
         
@@ -1241,8 +1241,8 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
         # Setting labels and limits
         ax.set_ylabel(r'MPIW', fontsize=8, labelpad=-3)
         ax.set_xlabel(r'Mean set size', fontsize=8, labelpad=0)
-        ax.set_ylim(78, 104)
-        ax.set_xlim(1.9, 3.3)
+        ax.set_ylim(40, 110)
+        ax.set_xlim(1.0, 3.5)
         
         # Create custom handles for the marker type legend (all grey)
         marker_handles = [mlines.Line2D([], [], color='grey', marker=markers[m], linestyle='None', 
@@ -1340,7 +1340,7 @@ def plot_main_results_efficiency(dataset="coco_val", to_file=True):
         
         for i, (method, score) in enumerate(methods):
             if method == "learn":
-                path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_box_set_table_{score}_res.csv"
+                path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_box_set_table_{score}_res.csv"
             else:
                 path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
             
@@ -1404,7 +1404,7 @@ def plot_baseline_comparison(dataset="coco_val", to_file=True):
         # Load actual MPIW values from CSV files
         for method, score in methods:
             if method == "learn":
-                csv_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_box_set_table_{score}_res.csv"
+                csv_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_box_set_table_{score}_res.csv"
             else:
                 csv_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
             
@@ -1546,13 +1546,13 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
     beff_cl, beff_miscl = [], []
     method_names = []
     
-    row = 4  # mean class (selected)
+    row_name = "mean class (selected)"
     
     # Load data for each method
     for method, score in methods:
         if method == "learn":
-            label_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_label_table.csv"
-            box_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_box_set_table_{score}_res.csv"
+            label_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_label_table.csv"
+            box_path = f"{res_folder}/learn_conf_x101fpn_learn_rank_class/learn_conf_x101fpn_learn_rank_class_box_set_table_{score}_res.csv"
         else:
             label_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_label_table.csv"
             box_path = f"{res_folder}/{method}_conf_x101fpn_{method}_rank_class/{method}_conf_x101fpn_{method}_rank_class_box_set_table_{score}_res.csv"
@@ -1563,16 +1563,20 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
             df_label = pd.read_csv(label_path)
             df_box = pd.read_csv(box_path)
             
-            if len(df_label) > row and len(df_box) > row:
-                lcov_cl.append(df_label["cov set cl"].iloc[row])
-                lcov_miscl.append(df_label["cov set miscl"].iloc[row])
-                leff_cl.append(df_label["mean set size cl"].iloc[row])
-                leff_miscl.append(df_label["mean set size miscl"].iloc[row])
+            # Find the row by name instead of using hardcoded index
+            label_row = df_label[df_label['class'] == row_name]
+            box_row = df_box[df_box['class'] == row_name]
+            
+            if not label_row.empty and not box_row.empty:
+                lcov_cl.append(label_row["cov set cl"].iloc[0])
+                lcov_miscl.append(label_row["cov set miscl"].iloc[0])
+                leff_cl.append(label_row["mean set size cl"].iloc[0])
+                leff_miscl.append(label_row["mean set size miscl"].iloc[0])
                 
-                bcov_cl.append(df_box["cov box cl"].iloc[row])
-                bcov_miscl.append(df_box["cov box miscl"].iloc[row])
-                beff_cl.append(df_box["mpiw cl"].iloc[row])
-                beff_miscl.append(df_box["mpiw miscl"].iloc[row])
+                bcov_cl.append(box_row["cov box cl"].iloc[0])
+                bcov_miscl.append(box_row["cov box miscl"].iloc[0])
+                beff_cl.append(box_row["mpiw cl"].iloc[0])
+                beff_miscl.append(box_row["mpiw miscl"].iloc[0])
                 
                 method_names.append(method)
             else:
@@ -1605,7 +1609,7 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
         
         ax.set_ylabel('Box cov.', fontsize=10)
         ax.set_xlabel('Label cov.', fontsize=10)
-        ax.set_ylim(0.92, 0.96)
+        ax.set_ylim(0.84, 0.96)
         ax.set_xlim(0.98, 1.01)
         ax.legend()
         
@@ -1630,8 +1634,8 @@ def plot_misclassification_analysis(dataset="coco_val", to_file=True):
         
         ax.set_ylabel('MPIW', fontsize=8, labelpad=-3)
         ax.set_xlabel('Mean set size', fontsize=8, labelpad=0)
-        ax.set_ylim(78, 104)
-        ax.set_xlim(1.9, 3.3)
+        ax.set_ylim(40, 110)
+        ax.set_xlim(1.0, 3.5)
         
         plt.tight_layout()
         
@@ -1678,7 +1682,7 @@ def plot_caption_lines(to_file=True):
     
     plt.show()
 
-def run_all_plots(dataset="coco_val", class_name="person", device="cuda", img_name="000000054593"):
+def run_all_plots(dataset="coco_val", class_name="person", device="cuda:1", img_name="000000054593"):
     """
     Run all plotting functions for the specified dataset and class (COCO only)
     """
@@ -1755,6 +1759,6 @@ if __name__ == "__main__":
     run_all_plots(
         dataset="coco_val",
         class_name="person", 
-        device="cuda",
+        device="cuda:1",
         img_name="000000054593"
     )

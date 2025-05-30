@@ -210,8 +210,13 @@ def main():
     if args.file_name_prefix is not None:
         file_name_prefix = args.file_name_prefix
     else:
+        # Add special suffix for learnable method to match plotting expectations
+        if args.risk_control == "learn_conf":
+            suffix = "_learn_rank_class" + args.file_name_suffix
+        else:
+            suffix = args.file_name_suffix
         file_name_prefix = (
-            f"{args.risk_control}_{cfg.MODEL.ID}{args.file_name_suffix}"
+            f"{args.risk_control}_{cfg.MODEL.ID}{suffix}"
         )
     outdir = cfg.PROJECT.OUTPUT_DIR
     filedir = os.path.join(outdir, data_name, file_name_prefix)
