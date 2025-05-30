@@ -35,12 +35,24 @@ _trained_uncertainty_extractor = None
 _model_path = None
 
 
-def load_trained_scoring_model(model_path: str = None):
+def clear_model_cache():
+    """Clear the cached model to free memory."""
+    global _trained_scoring_model, _trained_feature_extractor, _trained_uncertainty_extractor, _model_path
+    _trained_scoring_model = None
+    _trained_feature_extractor = None
+    _trained_uncertainty_extractor = None
+    _model_path = None
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def load_trained_scoring_model(model_path: str = None, force_cpu: bool = False):
     """
     Load the trained scoring function model and feature extractor.
     
     Args:
         model_path: Path to trained model checkpoint
+        force_cpu: Force loading model on CPU to save GPU memory
         
     Returns:
         model: Loaded ScoringMLP model
@@ -64,7 +76,25 @@ def load_trained_scoring_model(model_path: str = None):
             from learnable_scoring_fn.model import load_regression_model, UncertaintyFeatureExtractor
             from learnable_scoring_fn.feature_utils import FeatureExtractor
             
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # First try to load on GPU if not forced to CPU
+            if not force_cpu and torch.cuda.is_available():
+                try:
+                    # Check available GPU memory before loading
+                    gpu_mem = torch.cuda.get_device_properties(0).total_memory
+                    gpu_used = torch.cuda.memory_allocated(0)
+                    gpu_free = gpu_mem - gpu_used
+                    
+                    # If less than 1GB free, use CPU
+                    if gpu_free < 1e9:  # 1GB threshold
+                        print(f"Low GPU memory ({gpu_free/1e9:.2f}GB free), loading scoring model on CPU")
+                        device = torch.device("cpu")
+                    else:
+                        device = torch.device("cuda")
+                except Exception as e:
+                    print(f"Error checking GPU memory: {e}, loading on CPU")
+                    device = torch.device("cpu")
+            else:
+                device = torch.device("cpu")
             
             # Load model checkpoint
             model, checkpoint = load_regression_model(model_path, device)
@@ -137,8 +167,19 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
     if pred_score is None:
         raise ValueError("pred_score is required for learned scoring function")
     
-    # Load trained model
-    model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path)
+    # Try loading with GPU memory check first
+    try:
+        # Load trained model - will automatically check GPU memory
+        model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=False)
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower():
+            print("GPU out of memory, retrying with CPU...")
+            # Clear GPU cache and retry on CPU
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=True)
+        else:
+            raise
     
     if model is None or feature_extractor is None or uncertainty_extractor is None:
         raise RuntimeError("Failed to load trained scoring model")
@@ -260,8 +301,19 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
     Returns:
         scores_batch: Learned nonconformity scores [N]
     """
-    # Load model once for the entire batch
-    model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path)
+    # Try loading with GPU memory check first
+    try:
+        # Load model once for the entire batch - will automatically check GPU memory
+        model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=False)
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower():
+            print("GPU out of memory, retrying with CPU...")
+            # Clear GPU cache and retry on CPU
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=True)
+        else:
+            raise
     
     if model is None or feature_extractor is None or uncertainty_extractor is None:
         raise RuntimeError("Failed to load trained scoring model for batch processing")
