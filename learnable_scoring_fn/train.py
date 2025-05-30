@@ -25,6 +25,8 @@ import logging
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 import pickle
+import yaml
+from yacs.config import CfgNode
 
 # Add project paths
 project_root = "/ssd_4TB/divake/conformal-od"
@@ -51,6 +53,13 @@ from model import model_loader
 from detectron2.data import get_detection_dataset_dicts, MetadataCatalog
 from control.std_conformal import StdConformal
 from calibration.random_split import random_split
+
+
+def load_learnable_config(config_path):
+    """Load configuration for learnable scoring function."""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
 
 
 def setup_logging(output_dir: Path):
@@ -96,7 +105,7 @@ def load_existing_predictions(dataset_name, output_dir="/ssd_4TB/divake/conforma
     return None, None
 
 
-def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=None, logger=None):
+def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=None, logger=None, learnable_config=None):
     """
     Collect predictions for a specific dataset (train or val).
     
@@ -137,6 +146,8 @@ def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=
         cfg.DATASETS.DATASET.NAME = 'coco_train'
         cfg.DATASETS.DATASET.IMG_DIR = 'coco/train2017'
         cfg.DATASETS.DATASET.ANN_FILE = 'coco/annotations/instances_train2017.json'
+        # Ensure the data directory is set correctly
+        cfg.DATASETS.DIR = '/ssd_4TB/divake/conformal-od/data'
         # Use local checkpoint for train dataset to avoid model zoo error
         cfg.MODEL.LOCAL_CHECKPOINT = True
         cfg.MODEL.CHECKPOINT_PATH = 'checkpoints/x101fpn_train_qr_5k_postprocess.pth'
@@ -144,6 +155,12 @@ def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=
         cfg.MODEL.FILE = '/ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml'
         # Use StandardROIHeads instead of QuantileROIHead
         cfg.MODEL.CONFIG.MODEL.ROI_HEADS.NAME = 'StandardROIHeads'
+        # Add missing CALIBRATION section for train data (not used, but required by StdConformal)
+        cfg.CALIBRATION = CfgNode()
+        cfg.CALIBRATION.FRACTION = 0.5
+        cfg.CALIBRATION.BOX_CORRECTION = 'rank_coord'
+        cfg.CALIBRATION.BOX_SET_STRATEGY = 'max'
+        cfg.CALIBRATION.TRIALS = 100
     
     data_name = cfg.DATASETS.DATASET.NAME
     
@@ -181,11 +198,13 @@ def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=
         filter_empty=cfg.DATASETS.DATASET.FILTER_EMPTY
     )
     
-    # Limit dataset size for faster iteration
-    if dataset_type == 'train':
-        data_list = data_list[:2000]  # Use first 2000 training images
-    else:
-        data_list = data_list[:1000]  # Use first 1000 val images
+    # Limit dataset size based on config
+    if learnable_config and learnable_config['DATA']['LIMIT_DATASET_SIZE']:
+        max_images = learnable_config['DATA']['MAX_TRAIN_IMAGES'] if dataset_type == 'train' else learnable_config['DATA']['MAX_VAL_IMAGES']
+        if max_images > 0 and len(data_list) > max_images:
+            data_list = data_list[:max_images]
+            if logger:
+                logger.info(f"Limited {dataset_type} dataset to {max_images} images")
     
     dataloader = data_loader.d2_load_dataset_from_dict(
         data_list, cfg, cfg_model, logger=logger
@@ -216,9 +235,22 @@ def collect_predictions_for_dataset(cfg_file, cfg_path, dataset_type, cache_dir=
     )
     
     controller.set_collector(nr_class, len(data_list))
-    img_list, ist_list = controller.collect_predictions(model, dataloader)
     
-    # Cache predictions
+    # Create checkpoint directory if caching is enabled
+    checkpoint_dir = None
+    if cache_dir:
+        checkpoint_dir = Path(cache_dir) / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Collect predictions with checkpoint support
+    img_list, ist_list = controller.collect_predictions(
+        model, 
+        dataloader, 
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_freq=0.1  # Save checkpoint every 10%
+    )
+    
+    # Cache final predictions
     if cache_dir:
         cache_file = Path(cache_dir) / f"predictions_{dataset_type}.pkl"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -576,10 +608,15 @@ def plot_results(history, output_dir):
 def main():
     parser = argparse.ArgumentParser(description="Train regression-based scoring function")
     
-    # Data configuration
-    parser.add_argument('--config_file', type=str, default='cfg_std_rank')
-    parser.add_argument('--config_path', type=str, default='config/coco_val/')
-    parser.add_argument('--cache_dir', type=str, default='learnable_scoring_fn/experiments/cache')
+    # Learnable scoring function config
+    parser.add_argument('--learnable_config', type=str, 
+                        default='config/learnable_scoring_fn/default_config.yaml',
+                        help='Path to learnable scoring function configuration file')
+    
+    # Data configuration (can be overridden by command line)
+    parser.add_argument('--config_file', type=str, default=None)
+    parser.add_argument('--config_path', type=str, default=None)
+    parser.add_argument('--cache_dir', type=str, default=None)
     
     # Model architecture
     parser.add_argument('--hidden_dims', nargs='+', type=int, default=[256, 128, 64])
@@ -598,13 +635,54 @@ def main():
     parser.add_argument('--calibration_weight', type=float, default=0.1)
     
     # Other parameters  
-    parser.add_argument('--early_stopping_patience', type=int, default=20)
-    parser.add_argument('--calib_fraction', type=float, default=0.5)
-    parser.add_argument('--output_dir', type=Path, default=Path('learnable_scoring_fn/experiments/real_data_v1'))
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
-    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--early_stopping_patience', type=int, default=None)
+    parser.add_argument('--calib_fraction', type=float, default=None)
+    parser.add_argument('--output_dir', type=Path, default=None)
+    parser.add_argument('--device', type=str, default=None)
+    parser.add_argument('--seed', type=int, default=None)
     
     args = parser.parse_args()
+    
+    # Load learnable scoring function configuration
+    learnable_cfg = load_learnable_config(args.learnable_config)
+    
+    # Override args with config values if not specified on command line
+    if args.config_file is None:
+        args.config_file = learnable_cfg['CONFORMAL']['CONFIG_FILE']
+    if args.config_path is None:
+        args.config_path = learnable_cfg['CONFORMAL']['CONFIG_PATH']
+    if args.cache_dir is None:
+        args.cache_dir = learnable_cfg['DATA']['CACHE_DIR']
+    if args.hidden_dims == [256, 128, 64]:  # default value
+        args.hidden_dims = learnable_cfg['MODEL']['HIDDEN_DIMS']
+    if args.dropout_rate == 0.15:  # default value
+        args.dropout_rate = learnable_cfg['MODEL']['DROPOUT_RATE']
+    if args.num_epochs == 100:  # default value
+        args.num_epochs = learnable_cfg['TRAINING']['NUM_EPOCHS']
+    if args.batch_size == 128:  # default value
+        args.batch_size = learnable_cfg['TRAINING']['BATCH_SIZE']
+    if args.learning_rate == 0.001:  # default value
+        args.learning_rate = learnable_cfg['TRAINING']['LEARNING_RATE']
+    if args.weight_decay == 0.0001:  # default value
+        args.weight_decay = learnable_cfg['TRAINING']['WEIGHT_DECAY']
+    if args.grad_clip_norm == 1.0:  # default value
+        args.grad_clip_norm = learnable_cfg['TRAINING']['GRAD_CLIP_NORM']
+    if args.target_coverage == 0.9:  # default value
+        args.target_coverage = learnable_cfg['LOSS']['TARGET_COVERAGE']
+    if args.efficiency_weight == 0.05:  # default value
+        args.efficiency_weight = learnable_cfg['LOSS']['EFFICIENCY_WEIGHT']
+    if args.calibration_weight == 0.1:  # default value
+        args.calibration_weight = learnable_cfg['LOSS']['CALIBRATION_WEIGHT']
+    if args.early_stopping_patience is None:
+        args.early_stopping_patience = learnable_cfg['TRAINING']['EARLY_STOPPING_PATIENCE']
+    if args.calib_fraction is None:
+        args.calib_fraction = learnable_cfg['DATA']['CALIB_FRACTION']
+    if args.output_dir is None:
+        args.output_dir = Path(learnable_cfg['OUTPUT']['BASE_DIR']) / learnable_cfg['OUTPUT']['EXPERIMENT_NAME']
+    if args.device is None:
+        args.device = learnable_cfg['TRAINING']['DEVICE']
+    if args.seed is None:
+        args.seed = learnable_cfg['TRAINING']['SEED']
     
     # Set random seeds
     torch.manual_seed(args.seed)
@@ -625,15 +703,17 @@ def main():
     logger.info(f"Configuration: {vars(args)}")
     
     try:
-        # For faster development, use only validation set predictions
-        # Split val set into train/cal/test portions
-        logger.info("Using validation set for train/cal/test split (faster development)")
-        val_img_list, val_ist_list = collect_predictions_for_dataset(
-            args.config_file, args.config_path, 'val', args.cache_dir, logger
+        # Load COCO train dataset predictions for training the scoring function
+        logger.info("Loading COCO train dataset predictions for training...")
+        train_img_list, train_ist_list = collect_predictions_for_dataset(
+            args.config_file, args.config_path, 'train', args.cache_dir, logger, learnable_cfg
         )
         
-        # Use val data for both training and testing
-        train_img_list, train_ist_list = val_img_list, val_ist_list
+        # Load COCO val dataset predictions for calibration and test
+        logger.info("Loading COCO val dataset predictions for calibration/test split...")
+        val_img_list, val_ist_list = collect_predictions_for_dataset(
+            args.config_file, args.config_path, 'val', args.cache_dir, logger, learnable_cfg
+        )
         
         # Prepare training data
         train_features, train_pred, train_gt, train_errors, train_img_ids, \
@@ -695,6 +775,10 @@ def main():
         
         with open(args.output_dir / 'results.json', 'w') as f:
             json.dump(results, f, indent=2)
+        
+        # Save the config file used
+        with open(args.output_dir / 'config_used.yaml', 'w') as f:
+            yaml.dump(learnable_cfg, f, default_flow_style=False)
         
         logger.info("\n" + "="*60)
         logger.info("Training completed successfully!")

@@ -16,40 +16,15 @@ def main():
         "/home/divake/miniconda3/envs/env_cu121/bin/python",
         "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/train.py",
         
-        # Model configuration
-        "--config_file", "cfg_std_rank",
-        "--config_path", "config/coco_val/",
+        # Use the default config file
+        "--learnable_config", "config/learnable_scoring_fn/default_config.yaml"
         
-        # Architecture
-        "--hidden_dims", "256", "128", "64",
-        "--dropout_rate", "0.15",
-        
-        # Training parameters
-        "--num_epochs", "100",
-        "--batch_size", "128",
-        "--learning_rate", "0.001",
-        "--weight_decay", "0.0001",
-        
-        # Loss weights (adjusted for better coverage)
-        "--target_coverage", "0.9",
-        "--efficiency_weight", "0.05",   # Lower weight on width minimization
-        "--calibration_weight", "0.1",   # Higher weight on calibration
-        
-        # Other parameters
-        "--tau_update_freq", "5",
-        "--early_stopping_patience", "20",
-        "--train_frac", "0.6",
-        "--cal_frac", "0.2",
-        
-        # Output
-        "--output_dir", "learnable_scoring_fn/experiments/real_data_v1"
+        # All other parameters will be loaded from the config file
+        # You can still override specific parameters here if needed, e.g.:
+        # "--num_epochs", "50",  # Override the config value
     ]
     
-    print("📊 Configuration:")
-    print(f"  • Architecture: [256, 128, 64] with 15% dropout")
-    print(f"  • Learning rate: 0.001 with cosine annealing")
-    print(f"  • Target coverage: 90%")
-    print(f"  • Data split: 60% train, 20% cal, 20% val")
+    print("📊 Using configuration from: config/learnable_scoring_fn/default_config.yaml")
     print("=" * 70)
     
     try:
