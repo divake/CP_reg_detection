@@ -56,14 +56,14 @@ TRAINING:
 
 # Loss Function Configuration
 LOSS:
-  # Target coverage level (e.g., 0.9 for 90%)
-  TARGET_COVERAGE: 0.9
+  # Target coverage level (further increased to achieve 90%+ actual coverage)
+  TARGET_COVERAGE: 0.95
   
-  # Weight for efficiency loss (width minimization)
-  EFFICIENCY_WEIGHT: 0.05
+  # Weight for efficiency loss (reduced to prioritize coverage)
+  EFFICIENCY_WEIGHT: 0.01
   
-  # Weight for calibration loss
-  CALIBRATION_WEIGHT: 0.1
+  # Weight for calibration loss (significantly increased for better coverage)
+  CALIBRATION_WEIGHT: 0.8
   
   # Fixed tau value for coverage calculation
   FIXED_TAU: 1.0

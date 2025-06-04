@@ -92,9 +92,9 @@ class RegressionScoringFunction(nn.Module):
         raw_output = self.network(x)
         
         # Ensure positive width using softplus
-        # Initialize to produce widths around 25 pixels (90th percentile error)
-        # F.softplus(3.2) + 5.0 ≈ 29.4 pixels, which should give ~90% coverage
-        widths = F.softplus(raw_output + 3.2) + 20.0  # Start around ~25 pixels
+        # Initialize to produce widths around 30-35 pixels for higher coverage
+        # F.softplus(3.5) + 25.0 ≈ 35 pixels, which should give 90%+ coverage
+        widths = F.softplus(raw_output + 3.5) + 25.0  # Start around ~35 pixels
         
         # Clamp to reasonable range for bounding box coordinates
         widths = torch.clamp(widths, min=5.0, max=100.0)

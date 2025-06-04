@@ -1165,7 +1165,6 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
         
         # Load label data
         if os.path.exists(label_path):
-            pass  # Loading label data
             df = pd.read_csv(label_path)
             # Find the row by name instead of hardcoded index
             selected_row = df[df['class'] == row_name]
@@ -1182,7 +1181,6 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
         
         # Load box data
         if os.path.exists(box_path):
-            pass  # Loading box data
             df = pd.read_csv(box_path)
             # Find the row by name instead of hardcoded index
             selected_row = df[df['class'] == row_name]
@@ -1229,7 +1227,7 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
         plt.show()
         
         # Plot efficiency scatter
-        fig, ax = plt.subplots(figsize=(1.8, 1.5))
+        fig, ax = plt.subplots(figsize=(6.5, 2.5))
         
         # Scatter plots for actual data
         for i, m in enumerate(marker_list):
@@ -1239,33 +1237,35 @@ def plot_efficiency_scatter(dataset="coco_val", to_file=True):
                       alpha=0.8, linewidth=1, s=48)
         
         # Setting labels and limits
-        ax.set_ylabel(r'MPIW', fontsize=8, labelpad=-3)
-        ax.set_xlabel(r'Mean set size', fontsize=8, labelpad=0)
+        ax.set_ylabel(r'MPIW', fontsize=10)
+        ax.set_xlabel(r'Mean set size', fontsize=10)
         ax.set_ylim(40, 110)
         ax.set_xlim(1.0, 3.5)
         
         # Create custom handles for the marker type legend (all grey)
         marker_handles = [mlines.Line2D([], [], color='grey', marker=markers[m], linestyle='None', 
-                                      markersize=6, label=m) for m in marker_list]
-        
-        # Add the marker type legend to the plot
-        leg_markers = ax.legend(handles=marker_handles, loc='upper right', fontsize=6)
+                                      markersize=8, label=m) for m in marker_list]
         
         # Create handles for the color legend
         classif_handle = mlines.Line2D([], [], color=colors["Classif."], marker='s', linestyle='None', 
-                                     markersize=5, label='Classif.')
+                                     markersize=8, label='Classif.')
         misclassif_handle = mlines.Line2D([], [], color=colors["Misclassif."], marker='s', linestyle='None', 
-                                        markersize=5, label='Misclassif.')
+                                        markersize=8, label='Misclassif.')
         
-        # Add the color legend to the plot
-        ax.legend(handles=[classif_handle, misclassif_handle], loc='lower left', fontsize=6)
+        # Add legends completely outside the plot area with much more spacing
+        leg_markers = ax.legend(handles=marker_handles, bbox_to_anchor=(1.25, 1), loc='upper left', 
+                               fontsize=9, title='Methods', title_fontsize=10)
+        leg_colors = ax.legend(handles=[classif_handle, misclassif_handle], bbox_to_anchor=(1.25, 0.4), 
+                              loc='upper left', fontsize=9, title='Classification', title_fontsize=10)
         
-        # Manually add the first legend back to the plot
+        # Add the first legend back to the plot
         ax.add_artist(leg_markers)
         
-        plt.xticks(fontsize=6)
-        plt.yticks(fontsize=6)
-        plt.tight_layout()
+        plt.xticks(fontsize=9)
+        plt.yticks(fontsize=9)
+        
+        # Use subplots_adjust to make much more room for legends
+        plt.subplots_adjust(right=0.6)  # Reserve 40% of the figure for legends
         
         if to_file:
             fname = os.path.join(output_dir, f"{dataset}_size_vs_misclassif.png")
@@ -1481,7 +1481,7 @@ def plot_ablation_coverage_levels(dataset="coco_val", to_file=True):
     beff = np.random.uniform(70, 200, len(cov_combos))
     
     # Coverage plot
-    fig, ax = plt.subplots(figsize=(2, 2))
+    fig, ax = plt.subplots(figsize=(5.5, 2.5))
     
     for i, (bc, lc) in enumerate(cov_combos):
         ax.scatter(lcov[i], bcov[i], color=colors[str(lc)], marker=markers[str(bc)], 
@@ -1491,6 +1491,30 @@ def plot_ablation_coverage_levels(dataset="coco_val", to_file=True):
     ax.set_xlabel('Label cov.', fontsize=10)
     ax.set_xlim(0.75, 1.05)
     ax.set_ylim(0.8, 1.0)
+    
+    # Create custom legends
+    import matplotlib.lines as mlines
+    
+    # Color legend (Label Coverage levels)
+    color_handles = []
+    for lc in label_cov:
+        handle = mlines.Line2D([], [], color=colors[str(lc)], marker='s', linestyle='None', 
+                             markersize=6, label=f'Label α={1-lc:.2f}')
+        color_handles.append(handle)
+    
+    # Marker legend (Box Coverage levels)  
+    marker_handles = []
+    for bc in box_cov:
+        handle = mlines.Line2D([], [], color='grey', marker=markers[str(bc)], linestyle='None',
+                             markersize=6, label=f'Box α={1-bc:.2f}')
+        marker_handles.append(handle)
+    
+    # Add legends outside the plot area
+    leg1 = ax.legend(handles=color_handles, bbox_to_anchor=(1.05, 1), loc='upper left', 
+                     fontsize=8, title='Label Coverage')
+    leg2 = ax.legend(handles=marker_handles, bbox_to_anchor=(1.05, 0.5), loc='upper left', 
+                     fontsize=8, title='Box Coverage')
+    ax.add_artist(leg1)  # Add the first legend back
     
     plt.tight_layout()
     
@@ -1502,7 +1526,7 @@ def plot_ablation_coverage_levels(dataset="coco_val", to_file=True):
     plt.show()
     
     # Efficiency plot
-    fig, ax = plt.subplots(figsize=(2, 2))
+    fig, ax = plt.subplots(figsize=(5.5, 2.5))
     
     for i, (bc, lc) in enumerate(cov_combos):
         ax.scatter(leff[i], beff[i], color=colors[str(lc)], marker=markers[str(bc)], 
@@ -1512,6 +1536,30 @@ def plot_ablation_coverage_levels(dataset="coco_val", to_file=True):
     ax.set_xlabel('Mean set size', fontsize=10)
     ax.set_xlim(0.5, 7.5)
     ax.set_ylim(65, 215)
+    
+    # Create custom legends (same as coverage plot)
+    import matplotlib.lines as mlines
+    
+    # Color legend (Label Coverage levels)
+    color_handles = []
+    for lc in label_cov:
+        handle = mlines.Line2D([], [], color=colors[str(lc)], marker='s', linestyle='None', 
+                             markersize=6, label=f'Label α={1-lc:.2f}')
+        color_handles.append(handle)
+    
+    # Marker legend (Box Coverage levels)  
+    marker_handles = []
+    for bc in box_cov:
+        handle = mlines.Line2D([], [], color='grey', marker=markers[str(bc)], linestyle='None',
+                             markersize=6, label=f'Box α={1-bc:.2f}')
+        marker_handles.append(handle)
+    
+    # Add legends outside the plot area
+    leg1 = ax.legend(handles=color_handles, bbox_to_anchor=(1.05, 1), loc='upper left', 
+                     fontsize=8, title='Label Coverage')
+    leg2 = ax.legend(handles=marker_handles, bbox_to_anchor=(1.05, 0.5), loc='upper left', 
+                     fontsize=8, title='Box Coverage')
+    ax.add_artist(leg1)  # Add the first legend back
     
     plt.tight_layout()
     
