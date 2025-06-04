@@ -192,4 +192,7 @@ learnable_scoring_fn/experiments/*
 README.md
 learnable_scoring_fn/memory.md
 learnable_scoring_fn/README.md
-*bkp*
+*bkp*._ap_info.json
+*_ap_info.json
+experiments/
+learnable_scoring_fn/experiments*/*
