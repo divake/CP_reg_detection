@@ -40,7 +40,17 @@ class LearnConformal(RiskControl):
 
         self.calib_fraction = cfg.CALIBRATION.FRACTION
         self.calib_trials = cfg.CALIBRATION.TRIALS
-        self.calib_box_corr = cfg.CALIBRATION.BOX_CORRECTION
+        
+        # Check if we should use box correction from command line args
+        if hasattr(args, 'learn_use_correction') and args.learn_use_correction:
+            # Use box correction method specified in command line
+            self.calib_box_corr = args.box_correction_method
+            self.logger.info(f"Using box correction method: {self.calib_box_corr}")
+        else:
+            # Default behavior: no box correction for learnable method
+            self.calib_box_corr = "none"
+            self.logger.info("Using no box correction (default for learnable method)")
+        
         self.calib_alpha = args.alpha
 
         self.ap_eval = cfg.MODEL.AP_EVAL
@@ -263,7 +273,10 @@ class LearnConformal(RiskControl):
                     if scores[calib_mask].shape[0] == 0:  # degenerate case
                         continue
 
-                    # Compute quantiles coordinate-wise incl. box correction scheme
+                    # Compute quantiles
+                    # Note: learnable scoring functions can work with or without box correction
+                    # - Without correction: relies on learned scores optimized for box-level coverage
+                    # - With correction: applies traditional multiple testing corrections like other methods
                     quant = pred_intervals.compute_quantile(
                         scores=scores[calib_mask],
                         box_correction=self.calib_box_corr,

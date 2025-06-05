@@ -178,6 +178,28 @@ def create_parser():
         required=False,
         help="Path to trained learnable scoring function model (for learn_conf only).",
     )
+    parser.add_argument(
+        "--learn_use_correction",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        required=False,
+        help="For learn_conf: use box correction method (similar to std/ens/cqr) instead of none. Default is False (no correction).",
+    )
+    parser.add_argument(
+        "--box_correction_method",
+        type=str,
+        default="rank_coord",
+        required=False,
+        choices=["bonferroni", "bonferroni_sidak", "rank_global", "rank_coord", "score_global", "naive_max", "none"],
+        help="Box correction method to use when --learn_use_correction is enabled. Default is rank_coord.",
+    )
+    parser.add_argument(
+        "--calibration_trials",
+        type=int,
+        default=None,
+        required=False,
+        help="Number of calibration trials to run. Overrides config file setting. Default uses config file value.",
+    )
     return parser
 
 
@@ -205,6 +227,10 @@ def main():
     # Load config
     cfg = io_file.load_yaml(args.config_file, args.config_path, to_yacs=True)
     data_name = cfg.DATASETS.DATASET.NAME
+    
+    # Override calibration trials if specified in command line
+    if args.calibration_trials is not None:
+        cfg.CALIBRATION.TRIALS = args.calibration_trials
 
     # Determine file naming and create experiment folder
     if args.file_name_prefix is not None:
