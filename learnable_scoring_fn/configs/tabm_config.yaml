@@ -1,0 +1,15 @@
+# TabM specific configuration
+MODEL:
+  TYPE: "tabm"
+  TABM:
+    HIDDEN_DIMS: [128, 64, 32]
+    N_ENSEMBLE: 8
+    DROPOUT: 0.15
+    USE_SKIP: true
+
+# TabM training settings
+TRAINING:
+  LEARNING_RATE: 0.001
+  BATCH_SIZE: 128
+  NUM_EPOCHS: 100
+  WEIGHT_DECAY: 0.0001

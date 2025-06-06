@@ -1,0 +1,20 @@
+# SAINT-s specific configuration
+MODEL:
+  TYPE: "saint_s"
+  SAINT_S:
+    D_EMBED: 48
+    N_HEADS: 3
+    N_LAYERS: 2
+    DROPOUT: 0.1
+    USE_MIXUP: true
+
+# SAINT-s training settings
+TRAINING:
+  LEARNING_RATE: 0.0005
+  BATCH_SIZE: 256
+  NUM_EPOCHS: 150
+  WEIGHT_DECAY: 0.00001
+  LR_SCHEDULER:
+    TYPE: "cosine_warmup"
+    WARMUP_EPOCHS: 5
+    T_MAX: 145

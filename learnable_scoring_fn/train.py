@@ -37,12 +37,10 @@ sys.path.insert(0, project_root)
 
 os.environ['DETECTRON2_DATASETS'] = '/ssd_4TB/divake/conformal-od/data'
 
-# Import components
-from learnable_scoring_fn.model import (
-    RegressionScoringFunction, RegressionCoverageLoss,
-    calculate_tau_regression, UncertaintyFeatureExtractor,
-    save_regression_model
-)
+# Import components from new modular structure
+from learnable_scoring_fn.models import create_model
+from learnable_scoring_fn.core.loss import RegressionCoverageLoss, calculate_tau_regression
+from learnable_scoring_fn.model import UncertaintyFeatureExtractor, save_regression_model
 from learnable_scoring_fn.feature_utils import FeatureExtractor, get_feature_names
 
 # Import project components
@@ -420,11 +418,15 @@ def train_model(train_features, train_pred, train_gt, cal_data, test_data, args,
         test_errors.to(device)
     )
     
-    # Initialize model
-    model = RegressionScoringFunction(
+    # Initialize model using factory
+    model_config = {
+        'hidden_dims': args.hidden_dims,
+        'dropout_rate': args.dropout_rate
+    }
+    model = create_model(
+        model_type=args.model_type,
         input_dim=train_features.shape[1],
-        hidden_dims=args.hidden_dims,
-        dropout_rate=args.dropout_rate
+        config=model_config
     ).to(device)
     
     # Optimizer and scheduler
@@ -619,6 +621,9 @@ def main():
     parser.add_argument('--cache_dir', type=str, default=None)
     
     # Model architecture
+    parser.add_argument('--model_type', type=str, default='mlp',
+                        choices=['mlp', 'ft_transformer', 'tabm', 't2g_former', 'saint_s', 'regression_dlns'],
+                        help='Type of model to use')
     parser.add_argument('--hidden_dims', nargs='+', type=int, default=[256, 128, 64])
     parser.add_argument('--dropout_rate', type=float, default=0.15)
     

@@ -1,0 +1,20 @@
+# FT-Transformer specific configuration
+MODEL:
+  TYPE: "ft_transformer"
+  FT_TRANSFORMER:
+    N_BLOCKS: 2
+    D_BLOCK: 64
+    N_HEADS: 4
+    FFN_FACTOR: 1.0
+    DROPOUT: 0.1
+
+# FT-Transformer typically benefits from different training settings
+TRAINING:
+  LEARNING_RATE: 0.0005
+  BATCH_SIZE: 256
+  NUM_EPOCHS: 150
+  WEIGHT_DECAY: 0.00001
+  LR_SCHEDULER:
+    TYPE: "cosine"
+    T_MAX: 150
+    ETA_MIN: 0.000001

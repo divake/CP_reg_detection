@@ -190,9 +190,30 @@ plots/learnable_method_comparison/
 CLAUDE.md
 learnable_scoring_fn/experiments/*
 README.md
-learnable_scoring_fn/memory.md
-learnable_scoring_fn/README.md
+# Claude analysis and memory files
+*memory.md
+*MEMORY.md
+*SUMMARY.md
+*ANALYSIS.md
+*_ISSUE_*.md
+claude_*.md
+CLAUDE.md
+.claudeignore
+
+# Large data files
 *bkp*._ap_info.json
 *_ap_info.json
+
+# Experiment outputs
 experiments/
-learnable_scoring_fn/experiments*/*
+learnable_scoring_fn/experiments*/
+
+# Temporary and test files
+*test*.py
+*debug*.py
+*safe*.py
+*fix*.py
+*emergency*.py
+*.patch
+*.backup
+*.bak

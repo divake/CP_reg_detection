@@ -354,6 +354,23 @@ class UncertaintyFeatureExtractor:
         uncertainty_features = torch.cat(features, dim=1)  # [batch_size, 4]
         
         return uncertainty_features
+    
+    def extract_features(self, pred_coords: torch.Tensor, gt_coords: torch.Tensor, 
+                        confidence: torch.Tensor, ensemble_std: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Extract uncertainty features based on predictions and ground truth.
+        This is a wrapper that calls extract_uncertainty_features for compatibility.
+        
+        Args:
+            pred_coords: [batch_size, 4] predicted coordinates
+            gt_coords: [batch_size, 4] ground truth coordinates (not used currently)
+            confidence: [batch_size] confidence scores
+            ensemble_std: [batch_size, 4] ensemble standard deviations (if available)
+            
+        Returns:
+            features: [batch_size, 4] uncertainty features
+        """
+        return self.extract_uncertainty_features(pred_coords, confidence, ensemble_std)
 
 
 def save_regression_model(model: RegressionScoringFunction, optimizer: torch.optim.Optimizer,

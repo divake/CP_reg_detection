@@ -1,0 +1,12 @@
+# MLP-specific configuration
+MODEL:
+  TYPE: "mlp"
+  MLP:
+    HIDDEN_DIMS: [256, 128, 64]
+    DROPOUT_RATE: 0.15
+    ACTIVATION: "relu"
+
+# Override any base config values if needed
+TRAINING:
+  LEARNING_RATE: 0.001
+  BATCH_SIZE: 128
