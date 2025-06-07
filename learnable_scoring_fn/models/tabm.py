@@ -16,7 +16,7 @@ class TabMScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, hidden_dims: List[int] = [128, 64, 32], 
                  n_ensemble: int = 8, dropout: float = 0.15, use_skip: bool = True,
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Number of input features

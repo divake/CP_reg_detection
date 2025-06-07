@@ -17,7 +17,7 @@ class T2GFormerScoringFunction(BaseScoringFunction):
     def __init__(self, input_dim: int = 17, d_model: int = 64, n_heads: int = 4,
                  n_layers: int = 2, graph_hidden: int = 32, dropout: float = 0.1,
                  graph_sparsity: float = 0.3,
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Number of input features

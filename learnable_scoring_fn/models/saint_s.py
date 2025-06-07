@@ -16,7 +16,7 @@ class SAINTSScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, d_embed: int = 48, n_heads: int = 3,
                  n_layers: int = 2, dropout: float = 0.1, use_mixup: bool = True,
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Number of input features

@@ -39,7 +39,7 @@ os.environ['DETECTRON2_DATASETS'] = '/ssd_4TB/divake/conformal-od/data'
 
 # Import components from new modular structure
 from learnable_scoring_fn.models import create_model
-from learnable_scoring_fn.core.loss import RegressionCoverageLoss, calculate_tau_regression
+from learnable_scoring_fn.core.loss import RegressionCoverageLoss, AdaptiveCoverageLoss, calculate_tau_regression
 from learnable_scoring_fn.model import UncertaintyFeatureExtractor, save_regression_model
 from learnable_scoring_fn.feature_utils import FeatureExtractor, get_feature_names
 
@@ -418,11 +418,22 @@ def train_model(train_features, train_pred, train_gt, cal_data, test_data, args,
         test_errors.to(device)
     )
     
-    # Initialize model using factory
+    # Initialize model using factory with ADAPTIVE parameters
     model_config = {
         'hidden_dims': args.hidden_dims,
-        'dropout_rate': args.dropout_rate
+        'dropout_rate': args.dropout_rate,
+        'scoring_strategy': learnable_cfg.get('MODEL', {}).get('SCORING_STRATEGY', 'direct'),
+        'output_constraint': learnable_cfg.get('MODEL', {}).get('OUTPUT_CONSTRAINT', 'natural')
     }
+    
+    # Add model-specific configs if available
+    model_specific_config = learnable_cfg.get('MODEL', {}).get(args.model_type.upper(), {})
+    for key, value in model_specific_config.items():
+        if key.lower() not in model_config:
+            model_config[key.lower()] = value
+    
+    logger.info(f"Creating {args.model_type} model with config: {model_config}")
+    
     model = create_model(
         model_type=args.model_type,
         input_dim=train_features.shape[1],
@@ -440,12 +451,24 @@ def train_model(train_features, train_pred, train_gt, cal_data, test_data, args,
         optimizer, T_max=args.num_epochs, eta_min=args.learning_rate * 0.01
     )
     
-    # Loss function with lower efficiency weight initially
-    criterion = RegressionCoverageLoss(
-        target_coverage=args.target_coverage,
-        efficiency_weight=0.001,  # Start very low, increase during training
-        calibration_weight=args.calibration_weight
-    )
+    # Loss function - use adaptive loss if specified
+    use_adaptive_loss = learnable_cfg.get('USE_ADAPTIVE_LOSS', False)
+    
+    if use_adaptive_loss:
+        logger.info("Using AdaptiveCoverageLoss for training")
+        criterion = AdaptiveCoverageLoss(
+            target_coverage=args.target_coverage,
+            efficiency_weight=args.efficiency_weight,
+            ranking_weight=learnable_cfg.get('LOSS', {}).get('RANKING_WEIGHT', 0.05),
+            variance_weight=learnable_cfg.get('LOSS', {}).get('VARIANCE_WEIGHT', 0.02),
+            smoothness_weight=learnable_cfg.get('LOSS', {}).get('SMOOTHNESS_WEIGHT', 0.01)
+        )
+    else:
+        # NO FALLBACK - We must use adaptive loss!
+        raise ValueError(
+            "USE_ADAPTIVE_LOSS must be True! The old RegressionCoverageLoss is deprecated.\n"
+            "Please ensure your config file includes: USE_ADAPTIVE_LOSS: true"
+        )
     
     # Training history
     history = {

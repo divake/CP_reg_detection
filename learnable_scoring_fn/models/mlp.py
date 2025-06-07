@@ -17,7 +17,7 @@ class MLPScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, hidden_dims: list = [256, 128, 64], 
                  dropout_rate: float = 0.15, activation: str = 'relu',
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Dimension of input features (13 geometric + 4 uncertainty features)

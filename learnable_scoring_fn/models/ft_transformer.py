@@ -17,7 +17,7 @@ class FTTransformerScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, n_blocks: int = 2, d_block: int = 64, 
                  n_heads: int = 4, ffn_factor: float = 1.0, dropout: float = 0.1,
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Number of input features

@@ -1,36 +1,55 @@
 #!/usr/bin/env python3
 """
-Run regression-based scoring function training with real data.
+Run adaptive scoring function training using the CORRECT script.
+This ensures all models use proper adaptive parameters.
 """
 
 import subprocess
 import sys
+import argparse
+from pathlib import Path
 
 def main():
-    print("🚀 Starting Regression-Based Learnable Scoring Function Training")
+    parser = argparse.ArgumentParser(description='Train adaptive scoring functions')
+    parser.add_argument('--models', nargs='+', 
+                       default=['mlp', 'tabm', 't2g_former', 'regression_dlns', 'saint_s', 'ft_transformer'],
+                       help='Models to train')
+    parser.add_argument('--config', type=str,
+                       default='config/coco_val/cfg_std_rank.yaml',
+                       help='Base config file')
+    parser.add_argument('--force-retrain', action='store_true',
+                       help='Force retraining even if results exist')
+    args = parser.parse_args()
+    
+    print("🚀 Starting Adaptive Scoring Function Training")
     print("=" * 70)
-    print("Using REAL model predictions from COCO validation set")
+    print("Using train_all_models.py for CORRECT adaptive training")
+    print(f"Models to train: {', '.join(args.models)}")
     print("=" * 70)
     
+    # Use the CORRECT training script that passes all parameters
     cmd = [
         "/home/divake/miniconda3/envs/env_cu121/bin/python",
-        "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/train.py",
-        
-        # Use the default config file
-        "--learnable_config", "config/learnable_scoring_fn/default_config.yaml"
-        
-        # All other parameters will be loaded from the config file
-        # You can still override specific parameters here if needed, e.g.:
-        # "--num_epochs", "50",  # Override the config value
+        "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/scripts/train_all_models.py",
+        "--models"] + args.models + [
+        "--config", args.config
     ]
     
-    print("📊 Using configuration from: config/learnable_scoring_fn/default_config.yaml")
+    if args.force_retrain:
+        cmd.append("--force-retrain")
+    
+    print("📊 This will use the adaptive configuration with:")
+    print("   - OUTPUT_CONSTRAINT: natural")
+    print("   - SCORING_STRATEGY: direct")
+    print("   - USE_ADAPTIVE_LOSS: true")
     print("=" * 70)
     
     try:
         subprocess.run(cmd, check=True)
         print("\n✅ Training completed successfully!")
-        print("📂 Results saved to: learnable_scoring_fn/experiments/real_data_v1/")
+        print("📂 Results saved to: experiments/results_adaptive/")
+        print("\n⚠️  IMPORTANT: Never use the old train.py directly!")
+        print("   Always use this script or train_all_models.py")
     except subprocess.CalledProcessError as e:
         print(f"\n❌ Training failed with error code {e.returncode}")
         sys.exit(1)

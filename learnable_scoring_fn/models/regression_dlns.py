@@ -17,7 +17,7 @@ class RegressionDLNScoringFunction(BaseScoringFunction):
     def __init__(self, input_dim: int = 17, n_logic_layers: int = 2,
                  neurons_per_layer: List[int] = [32, 16], temperature: float = 0.5,
                  n_thresholds: int = 3, use_residual: bool = True,
-                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
+                 scoring_strategy: str = 'direct', output_constraint: str = 'natural'):
         """
         Args:
             input_dim: Number of input features

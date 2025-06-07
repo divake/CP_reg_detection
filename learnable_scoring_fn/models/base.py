@@ -17,8 +17,8 @@ class BaseScoringFunction(nn.Module, ABC):
     4. Provide a model_name property for logging
     """
     
-    def __init__(self, input_dim: int = 17, scoring_strategy: str = 'legacy', 
-                 output_constraint: str = 'legacy'):
+    def __init__(self, input_dim: int = 17, scoring_strategy: str = 'direct', 
+                 output_constraint: str = 'natural'):
         """Initialize base scoring function.
         
         Args:
