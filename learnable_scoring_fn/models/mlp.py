@@ -16,15 +16,18 @@ class MLPScoringFunction(BaseScoringFunction):
     """
     
     def __init__(self, input_dim: int = 17, hidden_dims: list = [256, 128, 64], 
-                 dropout_rate: float = 0.15, activation: str = 'relu'):
+                 dropout_rate: float = 0.15, activation: str = 'relu',
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Dimension of input features (13 geometric + 4 uncertainty features)
             hidden_dims: List of hidden layer dimensions
             dropout_rate: Dropout probability for regularization
             activation: Activation function type ('relu', 'elu', 'leaky_relu')
+            scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         self.hidden_dims = hidden_dims
         self.dropout_rate = dropout_rate
@@ -101,7 +104,9 @@ class MLPScoringFunction(BaseScoringFunction):
         return {
             'hidden_dims': self.hidden_dims,
             'dropout_rate': self.dropout_rate,
-            'activation': self.activation_type
+            'activation': self.activation_type,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

@@ -16,7 +16,8 @@ class FTTransformerScoringFunction(BaseScoringFunction):
     """
     
     def __init__(self, input_dim: int = 17, n_blocks: int = 2, d_block: int = 64, 
-                 n_heads: int = 4, ffn_factor: float = 1.0, dropout: float = 0.1):
+                 n_heads: int = 4, ffn_factor: float = 1.0, dropout: float = 0.1,
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Number of input features
@@ -25,8 +26,10 @@ class FTTransformerScoringFunction(BaseScoringFunction):
             n_heads: Number of attention heads
             ffn_factor: FFN dimension multiplier (ffn_dim = d_block * ffn_factor)
             dropout: Dropout probability
+            scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         # Save config
         self.n_blocks = n_blocks
@@ -128,7 +131,9 @@ class FTTransformerScoringFunction(BaseScoringFunction):
             'd_block': self.d_block,
             'n_heads': self.n_heads,
             'ffn_factor': self.ffn_factor,
-            'dropout': self.dropout_rate
+            'dropout': self.dropout_rate,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

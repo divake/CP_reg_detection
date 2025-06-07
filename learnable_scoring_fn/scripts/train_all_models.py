@@ -73,6 +73,10 @@ def load_config(model_type: str, config_dir: Optional[Path] = None) -> Dict[str,
     if config_dir is None:
         config_dir = project_root / "configs"
     
+    # Ensure config_dir is a Path object
+    if isinstance(config_dir, str):
+        config_dir = Path(config_dir)
+    
     base_config_path = config_dir / "base_config.yaml"
     model_config_path = config_dir / f"{model_type}_config.yaml"
     
@@ -84,7 +88,18 @@ def load_config(model_type: str, config_dir: Optional[Path] = None) -> Dict[str,
     if model_config_path.exists():
         with open(model_config_path, 'r') as f:
             model_config = yaml.safe_load(f)
-            # Deep merge configs
+            
+            # Handle __BASE__ directive if present
+            if '__BASE__' in model_config:
+                base_file = model_config.pop('__BASE__')
+                base_path = config_dir / base_file
+                if base_path.exists():
+                    with open(base_path, 'r') as bf:
+                        base_config = yaml.safe_load(bf)
+                        # First merge base config
+                        deep_merge(config, base_config)
+            
+            # Then merge model-specific config
             deep_merge(config, model_config)
     else:
         # If no model-specific config, set model type
@@ -218,6 +233,12 @@ def train_single_model(
     # Create model
     model_config = config.get('MODEL', {}).get(model_type.upper(), {})
     
+    # Add general MODEL settings (like SCORING_STRATEGY, OUTPUT_CONSTRAINT)
+    general_model_config = config.get('MODEL', {})
+    for key in ['SCORING_STRATEGY', 'OUTPUT_CONSTRAINT']:
+        if key in general_model_config and key not in model_config:
+            model_config[key] = general_model_config[key]
+    
     # Convert only the top-level config keys from uppercase to lowercase for compatibility
     if model_config:
         converted_config = {}
@@ -297,10 +318,13 @@ def train_single_model(
     with open(output_dir / "results.json", 'w') as f:
         json.dump(results, f, indent=2)
     
-    # Save final model
+    # Save final model with input_dim included
+    model_config = model.get_config()
+    model_config['input_dim'] = train_data['features'].shape[1]  # Add input_dim to config
+    
     torch.save({
         'model_state_dict': model.state_dict(),
-        'model_config': model.get_config(),
+        'model_config': model_config,
         'model_type': model_type,
         'results': results
     }, output_dir / "final_model.pt")

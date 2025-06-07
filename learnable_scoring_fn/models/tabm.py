@@ -15,7 +15,8 @@ class TabMScoringFunction(BaseScoringFunction):
     """
     
     def __init__(self, input_dim: int = 17, hidden_dims: List[int] = [128, 64, 32], 
-                 n_ensemble: int = 8, dropout: float = 0.15, use_skip: bool = True):
+                 n_ensemble: int = 8, dropout: float = 0.15, use_skip: bool = True,
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Number of input features
@@ -23,8 +24,10 @@ class TabMScoringFunction(BaseScoringFunction):
             n_ensemble: Number of ensemble members
             dropout: Dropout probability
             use_skip: Whether to use skip connections
+            scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         self.hidden_dims = hidden_dims
         self.n_ensemble = n_ensemble
@@ -157,7 +160,9 @@ class TabMScoringFunction(BaseScoringFunction):
             'hidden_dims': self.hidden_dims,
             'n_ensemble': self.n_ensemble,
             'dropout': self.dropout_rate,
-            'use_skip': self.use_skip
+            'use_skip': self.use_skip,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

@@ -1,15 +1,15 @@
-# Adaptive configuration for TABM
+# Adaptive configuration for REGRESSION_DLNS
 # Inherits from adaptive_config.yaml and adds model-specific settings
 
 # Import base adaptive settings
 __BASE__: adaptive_config.yaml
 
 # Model-specific settings
-MODEL_TYPE: "tabm"
+MODEL_TYPE: "regression_dlns"
 
 # Override any model-specific parameters here
 
-TABM:
-  NUM_BLOCKS: 4  # More blocks for complex patterns
-  DIM: 128
-  DROPOUT: 0.05
+REGRESSION_DLNS:
+  HIDDEN_DIM: 256
+  NUM_LAYERS: 6
+  DROPOUT: 0.1

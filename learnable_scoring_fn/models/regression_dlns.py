@@ -16,7 +16,8 @@ class RegressionDLNScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, n_logic_layers: int = 2,
                  neurons_per_layer: List[int] = [32, 16], temperature: float = 0.5,
-                 n_thresholds: int = 3, use_residual: bool = True):
+                 n_thresholds: int = 3, use_residual: bool = True,
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Number of input features
@@ -25,8 +26,10 @@ class RegressionDLNScoringFunction(BaseScoringFunction):
             temperature: Temperature for differentiable operations
             n_thresholds: Number of thresholds per feature for binarization
             use_residual: Whether to use residual connections
+                    scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         self.n_logic_layers = n_logic_layers
         self.neurons_per_layer = neurons_per_layer
@@ -131,7 +134,9 @@ class RegressionDLNScoringFunction(BaseScoringFunction):
             'neurons_per_layer': self.neurons_per_layer,
             'temperature': self.temperature,
             'n_thresholds': self.n_thresholds,
-            'use_residual': self.use_residual
+            'use_residual': self.use_residual,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

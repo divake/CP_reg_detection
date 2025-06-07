@@ -12,7 +12,7 @@ import time
 from typing import Dict, Any, Optional, Tuple
 import matplotlib.pyplot as plt
 
-from .loss import RegressionCoverageLoss
+from .loss import RegressionCoverageLoss, AdaptiveCoverageLoss
 
 
 def train_model(
@@ -118,12 +118,25 @@ def train_model(
     else:
         scheduler = None
     
-    # Loss function
-    criterion = RegressionCoverageLoss(
-        target_coverage=config['LOSS']['TARGET_COVERAGE'],
-        efficiency_weight=config['LOSS']['EFFICIENCY_WEIGHT'],
-        calibration_weight=config['LOSS']['CALIBRATION_WEIGHT']
-    )
+    # Loss function - use adaptive loss if specified
+    use_adaptive_loss = config.get('USE_ADAPTIVE_LOSS', False)
+    
+    if use_adaptive_loss:
+        criterion = AdaptiveCoverageLoss(
+            target_coverage=config['LOSS']['TARGET_COVERAGE'],
+            efficiency_weight=config['LOSS']['EFFICIENCY_WEIGHT'],
+            ranking_weight=config['LOSS'].get('RANKING_WEIGHT', 0.05),
+            variance_weight=config['LOSS'].get('VARIANCE_WEIGHT', 0.02),
+            smoothness_weight=config['LOSS'].get('SMOOTHNESS_WEIGHT', 0.01)
+        )
+        logger.info("Using AdaptiveCoverageLoss for training")
+    else:
+        criterion = RegressionCoverageLoss(
+            target_coverage=config['LOSS']['TARGET_COVERAGE'],
+            efficiency_weight=config['LOSS']['EFFICIENCY_WEIGHT'],
+            calibration_weight=config['LOSS']['CALIBRATION_WEIGHT']
+        )
+        logger.info("Using RegressionCoverageLoss for training")
     
     # Training history
     history = {
@@ -151,8 +164,15 @@ def train_model(
         
         for batch_features, batch_pred, batch_gt in train_loader:
             # Forward pass
-            widths = model(batch_features)
-            losses = criterion(widths, batch_gt, batch_pred, tau)
+            scores = model(batch_features)
+            
+            # Call loss function with appropriate arguments
+            if use_adaptive_loss:
+                # AdaptiveCoverageLoss expects features for smoothness
+                losses = criterion(scores, batch_gt, batch_pred, batch_features)
+            else:
+                # RegressionCoverageLoss expects tau
+                losses = criterion(scores, batch_gt, batch_pred, tau)
             
             # Backward pass
             optimizer.zero_grad()
@@ -172,17 +192,30 @@ def train_model(
         model.eval()
         with torch.no_grad():
             # Test set evaluation
-            test_widths = model(test_features)
-            test_losses = criterion(test_widths, test_gt, test_pred, tau)
+            test_scores = model(test_features)
+            
+            # Call loss function with appropriate arguments
+            if use_adaptive_loss:
+                test_losses = criterion(test_scores, test_gt, test_pred, test_features)
+            else:
+                test_losses = criterion(test_scores, test_gt, test_pred, tau)
             
             # Calculate coverage
-            interval_half_widths = test_widths * tau
-            lower_bounds = test_pred - interval_half_widths.expand(-1, 4)
-            upper_bounds = test_pred + interval_half_widths.expand(-1, 4)
-            
-            test_covered = ((test_gt >= lower_bounds) & (test_gt <= upper_bounds)).all(dim=1).float()
-            test_coverage = test_covered.mean().item()
-            test_avg_width = test_widths.mean().item()
+            # For adaptive loss, scores are nonconformity scores, not widths
+            if use_adaptive_loss:
+                # Use scores directly as intervals for coverage calculation
+                # This is a simplification - in practice you'd calibrate first
+                test_avg_width = test_scores.mean().item()
+                test_coverage = test_losses['actual_coverage'].item()
+            else:
+                # Legacy behavior - scores are widths
+                interval_half_widths = test_scores * tau
+                lower_bounds = test_pred - interval_half_widths.expand(-1, 4)
+                upper_bounds = test_pred + interval_half_widths.expand(-1, 4)
+                
+                test_covered = ((test_gt >= lower_bounds) & (test_gt <= upper_bounds)).all(dim=1).float()
+                test_coverage = test_covered.mean().item()
+                test_avg_width = test_scores.mean().item()
         
         # Update history
         avg_train_loss = np.mean(train_losses)
@@ -249,17 +282,29 @@ def train_model(
     # Final evaluation
     model.eval()
     with torch.no_grad():
-        test_widths = model(test_features)
-        test_losses = criterion(test_widths, test_gt, test_pred, tau)
+        test_scores = model(test_features)
+        
+        # Call loss with appropriate arguments  
+        if use_adaptive_loss:
+            test_losses = criterion(test_scores, test_gt, test_pred, test_features)
+        else:
+            test_losses = criterion(test_scores, test_gt, test_pred, tau)
         
         # Calculate final metrics
-        interval_half_widths = test_widths * tau
-        lower_bounds = test_pred - interval_half_widths.expand(-1, 4)
-        upper_bounds = test_pred + interval_half_widths.expand(-1, 4)
+        if use_adaptive_loss:
+            # For adaptive loss, scores are nonconformity scores
+            final_avg_width = test_scores.mean().item()
+            final_coverage = test_losses['actual_coverage'].item()
+        else:
+            # Legacy behavior - scores are widths
+            interval_half_widths = test_scores * tau
+            lower_bounds = test_pred - interval_half_widths.expand(-1, 4)
+            upper_bounds = test_pred + interval_half_widths.expand(-1, 4)
+            
+            test_covered = ((test_gt >= lower_bounds) & (test_gt <= upper_bounds)).all(dim=1).float()
+            final_coverage = test_covered.mean().item()
+            final_avg_width = test_scores.mean().item()
         
-        test_covered = ((test_gt >= lower_bounds) & (test_gt <= upper_bounds)).all(dim=1).float()
-        final_coverage = test_covered.mean().item()
-        final_avg_width = test_widths.mean().item()
         final_efficiency = 1.0 / (final_avg_width + 1e-6)
     
     # Save training history

@@ -15,7 +15,8 @@ class SAINTSScoringFunction(BaseScoringFunction):
     """
     
     def __init__(self, input_dim: int = 17, d_embed: int = 48, n_heads: int = 3,
-                 n_layers: int = 2, dropout: float = 0.1, use_mixup: bool = True):
+                 n_layers: int = 2, dropout: float = 0.1, use_mixup: bool = True,
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Number of input features
@@ -24,8 +25,10 @@ class SAINTSScoringFunction(BaseScoringFunction):
             n_layers: Number of transformer layers
             dropout: Dropout probability
             use_mixup: Whether to use mixup augmentation
+                    scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         self.d_embed = d_embed
         self.n_heads = n_heads
@@ -211,7 +214,9 @@ class SAINTSScoringFunction(BaseScoringFunction):
             'n_heads': self.n_heads,
             'n_layers': self.n_layers,
             'dropout': self.dropout_rate,
-            'use_mixup': self.use_mixup
+            'use_mixup': self.use_mixup,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

@@ -410,12 +410,21 @@ def load_regression_model(filepath: str, device: torch.device = None) -> Tuple:
         else:
             raise
     
-    # Recreate model from config
-    model_config = checkpoint['model_config']
-    model = RegressionScoringFunction(
-        input_dim=model_config['input_dim'],
-        hidden_dims=model_config['hidden_dims'],
-        dropout_rate=model_config['dropout_rate']
+    # Get model type and config
+    model_type = checkpoint.get('model_type', 'mlp')  # Default to mlp for backward compatibility
+    model_config = checkpoint['model_config'].copy()  # Make a copy to avoid modifying original
+    
+    # Import factory to create the correct model type
+    from learnable_scoring_fn.models.factory import create_model
+    
+    # Extract input_dim separately from config
+    input_dim = model_config.pop('input_dim')
+    
+    # Create model using factory
+    model = create_model(
+        model_type=model_type,
+        input_dim=input_dim,
+        config=model_config
     )
     
     # Load weights

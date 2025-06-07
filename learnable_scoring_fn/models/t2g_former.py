@@ -16,7 +16,8 @@ class T2GFormerScoringFunction(BaseScoringFunction):
     
     def __init__(self, input_dim: int = 17, d_model: int = 64, n_heads: int = 4,
                  n_layers: int = 2, graph_hidden: int = 32, dropout: float = 0.1,
-                 graph_sparsity: float = 0.3):
+                 graph_sparsity: float = 0.3,
+                 scoring_strategy: str = 'legacy', output_constraint: str = 'legacy'):
         """
         Args:
             input_dim: Number of input features
@@ -26,8 +27,10 @@ class T2GFormerScoringFunction(BaseScoringFunction):
             graph_hidden: Hidden dimension for graph estimation
             dropout: Dropout probability
             graph_sparsity: Target sparsity for learned graph (0-1)
+                    scoring_strategy: 'legacy' or 'direct' for adaptive scoring
+            output_constraint: 'legacy', 'natural', or 'unconstrained'
         """
-        super().__init__(input_dim)
+        super().__init__(input_dim, scoring_strategy, output_constraint)
         
         self.d_model = d_model
         self.n_heads = n_heads
@@ -201,6 +204,9 @@ class T2GFormerScoringFunction(BaseScoringFunction):
             'graph_hidden': self.graph_hidden,
             'dropout': self.dropout_rate,
             'graph_sparsity': self.graph_sparsity
+        ,
+            'scoring_strategy': self.scoring_strategy,
+            'output_constraint': self.output_constraint
         }
     
     @property

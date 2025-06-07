@@ -1,15 +1,17 @@
-# Adaptive configuration for TABM
+# Adaptive configuration for FT_TRANSFORMER
 # Inherits from adaptive_config.yaml and adds model-specific settings
 
 # Import base adaptive settings
 __BASE__: adaptive_config.yaml
 
 # Model-specific settings
-MODEL_TYPE: "tabm"
+MODEL_TYPE: "ft_transformer"
 
 # Override any model-specific parameters here
 
-TABM:
-  NUM_BLOCKS: 4  # More blocks for complex patterns
+TRANSFORMER:
+  NUM_LAYERS: 4
   DIM: 128
+  NUM_HEADS: 8
   DROPOUT: 0.05
+  ATTENTION_DROPOUT: 0.05

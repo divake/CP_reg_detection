@@ -146,12 +146,13 @@ def load_trained_scoring_model(model_path: str = None, force_cpu: bool = False):
 
 
 def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor = None, 
-                 model_path: str = None, fallback_to_abs: bool = False):
+                 model_path: str = None, fallback_to_abs: bool = False, adaptive_mode: bool = False):
     """
-    Learnable scoring function - uses trained model to compute nonconformity scores directly.
+    Learnable scoring function - uses trained model to compute nonconformity scores.
     
-    Pure classification framework: MLP outputs learned nonconformity scores directly from features.
-    The model learns to map prediction features to appropriate nonconformity scores.
+    Supports two modes:
+    1. Legacy mode (adaptive_mode=False): Outputs width predictions that multiply errors
+    2. Adaptive mode (adaptive_mode=True): Outputs pure nonconformity scores
     
     Args:
         gt: Ground truth coordinates [N] or [N, 4] or single scalar (used for feature extraction during training)
@@ -159,6 +160,7 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         pred_score: Prediction confidence scores [N] or single scalar (required for learned scoring)
         model_path: Path to trained model (optional, uses default if None)
         fallback_to_abs: Deprecated - no longer used
+        adaptive_mode: If True, return pure nonconformity scores. If False, use legacy width prediction.
         
     Returns:
         scores: Learned nonconformity scores (same shape as input coordinates)
@@ -230,15 +232,23 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         normalized_features = feature_extractor.normalize_features(combined_features)
         
         with torch.no_grad():
-            learned_nonconf_score = model(normalized_features).squeeze()  # scalar or [1]
+            model_output = model(normalized_features).squeeze()  # scalar or [1]
         
-        # Pure classification framework: return learned score directly
-        if learned_nonconf_score.dim() == 0:
-            learned_score_value = learned_nonconf_score.item()
+        if adaptive_mode:
+            # Adaptive mode: return pure nonconformity score
+            if model_output.dim() == 0:
+                return model_output.item()
+            else:
+                return model_output[0].item()
         else:
-            learned_score_value = learned_nonconf_score[0].item()
-        
-        return learned_score_value
+            # Legacy mode: model output represents a width that scales with error
+            # In single coordinate case, we don't have actual error, so return the width directly
+            if model_output.dim() == 0:
+                learned_score_value = model_output.item()
+            else:
+                learned_score_value = model_output[0].item()
+            
+            return learned_score_value
     
     # Multi-coordinate case
     elif gt_tensor.dim() == 1 and len(gt_tensor) > 1:
@@ -249,7 +259,9 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
                 gt_tensor[i].item(), 
                 pred_tensor[i].item(), 
                 score_tensor[i].item(),
-                model_path
+                model_path,
+                fallback_to_abs,
+                adaptive_mode
             )
             results.append(single_result)
         return torch.tensor(results, dtype=torch.float32)
@@ -274,14 +286,26 @@ def learned_score(gt: torch.Tensor, pred: torch.Tensor, pred_score: torch.Tensor
         normalized_features = feature_extractor.normalize_features(combined_features)
         
         with torch.no_grad():
-            learned_nonconf_scores = model(normalized_features).squeeze()  # [N]
+            model_output = model(normalized_features).squeeze()  # [N]
         
-        # Pure classification framework: return learned scores directly, broadcast to coordinates
-        if learned_nonconf_scores.dim() == 0:
-            learned_nonconf_scores = learned_nonconf_scores.unsqueeze(0)  # [1]
-        learned_scores_broadcast = learned_nonconf_scores.unsqueeze(1).expand(-1, 4)  # [N, 4]
+        if model_output.dim() == 0:
+            model_output = model_output.unsqueeze(0)  # [1]
         
-        return learned_scores_broadcast.cpu()
+        if adaptive_mode:
+            # Adaptive mode: model outputs are nonconformity scores
+            # Compute coordinate-specific scores based on actual errors
+            errors = torch.abs(gt_tensor - pred_tensor)  # [N, 4]
+            
+            # Model output represents difficulty/uncertainty - higher means harder prediction
+            # Scale errors by model output to get adaptive nonconformity scores
+            scores = errors * model_output.unsqueeze(1).expand(-1, 4)  # [N, 4]
+            
+            return scores.cpu()
+        else:
+            # Legacy mode: model outputs are widths, broadcast to all coordinates
+            learned_scores_broadcast = model_output.unsqueeze(1).expand(-1, 4)  # [N, 4]
+            
+            return learned_scores_broadcast.cpu()
     
     else:
         raise ValueError(f"Unexpected tensor shapes: gt={gt_tensor.shape}, pred={pred_tensor.shape}")
@@ -347,6 +371,84 @@ def get_learned_score_batch(gt_batch: torch.Tensor, pred_batch: torch.Tensor,
     
     # Return mean across coordinates
     return scaled_scores.mean(dim=1).cpu()
+
+
+def learned_score_adaptive(pred: torch.Tensor, pred_score: torch.Tensor = None, 
+                          model_path: str = None, scoring_strategy: str = 'direct'):
+    """
+    Adaptive learned scoring function that outputs pure nonconformity scores.
+    This version doesn't require ground truth during inference.
+    
+    Args:
+        pred: Predicted coordinates [N, 4]
+        pred_score: Prediction confidence scores [N]
+        model_path: Path to trained model
+        scoring_strategy: Strategy for score computation ('direct', 'multiplicative', 'coordinate_specific')
+        
+    Returns:
+        scores: Nonconformity scores [N] or [N, 4] depending on strategy
+    """
+    if pred_score is None:
+        raise ValueError("pred_score is required for learned scoring function")
+    
+    # Load model
+    try:
+        model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=False)
+    except RuntimeError as e:
+        if "out of memory" in str(e).lower():
+            print("GPU out of memory, retrying with CPU...")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            model, feature_extractor, uncertainty_extractor = load_trained_scoring_model(model_path, force_cpu=True)
+        else:
+            raise
+    
+    if model is None:
+        raise RuntimeError("Failed to load trained scoring model")
+    
+    model.eval()
+    device = next(model.parameters()).device
+    
+    # Ensure tensors
+    pred_tensor = torch.tensor(pred, dtype=torch.float32) if not isinstance(pred, torch.Tensor) else pred.clone()
+    score_tensor = torch.tensor(pred_score, dtype=torch.float32) if not isinstance(pred_score, torch.Tensor) else pred_score.clone()
+    
+    # Move to device
+    pred_tensor = pred_tensor.to(device)
+    score_tensor = score_tensor.to(device)
+    
+    # Extract features
+    geometric_features = feature_extractor.extract_features(pred_tensor, score_tensor)
+    uncertainty_features = uncertainty_extractor.extract_uncertainty_features(pred_tensor, score_tensor)
+    combined_features = torch.cat([geometric_features, uncertainty_features], dim=1)
+    normalized_features = feature_extractor.normalize_features(combined_features)
+    
+    # Get model predictions
+    with torch.no_grad():
+        model_output = model(normalized_features).squeeze()  # [N] or [N, C]
+    
+    if model_output.dim() == 0:
+        model_output = model_output.unsqueeze(0)
+    
+    # Apply scoring strategy
+    if scoring_strategy == 'direct':
+        # Direct nonconformity scores
+        return model_output.cpu()
+    
+    elif scoring_strategy == 'multiplicative':
+        # Use exponential to ensure positive scaling
+        scale_factors = torch.exp(model_output)
+        return scale_factors.cpu()
+    
+    elif scoring_strategy == 'coordinate_specific':
+        # Model should output 4 values per prediction
+        if model_output.shape[-1] != 4:
+            # If not, expand to 4 coordinates
+            model_output = model_output.unsqueeze(1).expand(-1, 4)
+        return model_output.cpu()
+    
+    else:
+        return model_output.cpu()
 
 
 # Convenience function for integration with existing code
