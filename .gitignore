@@ -208,6 +208,8 @@ CLAUDE.md
 # Experiment outputs
 experiments/
 learnable_scoring_fn/experiments*/
+learnable_scoring_fn/saved_models/
+learnable_scoring_fn/logs/
 
 # Temporary and test files
 *test*.py
@@ -219,3 +221,28 @@ learnable_scoring_fn/experiments*/
 *.backup
 *.bak
 MIGRATION_GUIDE.md
+cache_base_model
+
+# Legacy files moved during refactoring
+learnable_scoring_fn/legacy/
+
+# Model checkpoints and results
+*.pt
+*.pth
+checkpoint_*.pt
+best_model.pt
+final_results.json
+
+# CSV and log outputs
+*.csv
+training.log
+errors.log
+
+# Plots and visualizations  
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# But keep important documentation images
+!method-diag.jpg
