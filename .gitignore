@@ -199,6 +199,7 @@ README.md
 claude_*.md
 CLAUDE.md
 .claudeignore
+*.md
 
 # Large data files
 *bkp*._ap_info.json
@@ -217,3 +218,4 @@ learnable_scoring_fn/experiments*/
 *.patch
 *.backup
 *.bak
+MIGRATION_GUIDE.md

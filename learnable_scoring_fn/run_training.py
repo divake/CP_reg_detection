@@ -14,9 +14,9 @@ def main():
     parser.add_argument('--models', nargs='+', 
                        default=['mlp', 'tabm', 't2g_former', 'regression_dlns', 'saint_s', 'ft_transformer'],
                        help='Models to train')
-    parser.add_argument('--config', type=str,
-                       default='config/coco_val/cfg_std_rank.yaml',
-                       help='Base config file')
+    parser.add_argument('--config-dir', type=str,
+                       default='learnable_scoring_fn/configs',
+                       help='Configuration directory')
     parser.add_argument('--force-retrain', action='store_true',
                        help='Force retraining even if results exist')
     args = parser.parse_args()
@@ -32,7 +32,7 @@ def main():
         "/home/divake/miniconda3/envs/env_cu121/bin/python",
         "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/scripts/train_all_models.py",
         "--models"] + args.models + [
-        "--config", args.config
+        "--config-dir", args.config_dir
     ]
     
     if args.force_retrain:

@@ -1,4 +1,9 @@
 # Regression DLNs specific configuration
+# Inherits from adaptive_config.yaml
+
+# Import base adaptive settings
+__BASE__: adaptive_config.yaml
+
 MODEL:
   TYPE: "regression_dlns"
   REGRESSION_DLNS:

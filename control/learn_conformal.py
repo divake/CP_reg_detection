@@ -99,6 +99,9 @@ class LearnConformal(RiskControl):
         
         if os.path.exists(img_list_file) and os.path.exists(ist_list_file):
             self.logger.info("Found existing prediction files. Loading from cache...")
+            self.logger.info(f"Cache files found:")
+            self.logger.info(f"  - {img_list_file} (size: {os.path.getsize(img_list_file)/1024/1024:.2f} MB)")
+            self.logger.info(f"  - {ist_list_file} (size: {os.path.getsize(ist_list_file)/1024/1024:.2f} MB)")
             self.logger.info(f"Loading {img_list_file}")
             self.logger.info(f"Loading {ist_list_file}")
             
@@ -192,6 +195,16 @@ class LearnConformal(RiskControl):
 
                 del gt, pred, pred_ist
 
+        # Save predictions for caching
+        import json
+        with open(img_list_file, 'w') as f:
+            json.dump(self.collector.img_list, f)
+        with open(ist_list_file, 'w') as f:
+            json.dump(self.collector.ist_list, f)
+        self.logger.info(f"Saved predictions to cache:")
+        self.logger.info(f"  - {img_list_file}")
+        self.logger.info(f"  - {ist_list_file}")
+        
         if self.ap_eval:
             self.ap_evaluator.to_file(
                 self.ap_evaluator.ap_info, "ap_info", self.filedir
@@ -261,14 +274,29 @@ class LearnConformal(RiskControl):
                     gt = torch.zeros((len(ist_list[c]["gt_x0"]), 4), dtype=torch.float32)
                     pred = torch.zeros((len(ist_list[c]["gt_x0"]), 4), dtype=torch.float32)
 
-                    # Convert instance data to tensors
+                    # Convert instance data to tensors and compute proper scores
                     for coord_idx in range(4):
                         score_field = self.collector.score_fields[i + coord_idx]
                         coord_field = self.collector.coord_fields[coord_idx]
                         
-                        scores[:, coord_idx] = torch.tensor(ist_list[c][score_field])
+                        # Load ground truth and predictions
                         gt[:, coord_idx] = torch.tensor(ist_list[c]["gt_" + coord_field])
                         pred[:, coord_idx] = torch.tensor(ist_list[c]["pred_" + coord_field])
+                        
+                        # PROPER NONCONFORMITY SCORE COMPUTATION
+                        if "learn_res" in score_field:
+                            # Learned models output width predictions
+                            learned_widths = torch.tensor(ist_list[c][score_field])
+                            
+                            # Compute actual errors
+                            actual_errors = torch.abs(gt[:, coord_idx] - pred[:, coord_idx])
+                            
+                            # Proper nonconformity score: error normalized by predicted width
+                            # Higher score = larger error relative to predicted uncertainty
+                            scores[:, coord_idx] = actual_errors / (learned_widths + 1e-6)
+                        else:
+                            # For other score types (abs_res), use directly
+                            scores[:, coord_idx] = torch.tensor(ist_list[c][score_field])
 
                     if scores[calib_mask].shape[0] == 0:  # degenerate case
                         continue
@@ -283,6 +311,15 @@ class LearnConformal(RiskControl):
                         alpha=self.calib_alpha,
                     )
 
+                    # PROPER FIX: Log diagnostic information
+                    if t == 0 and c == 0 and s == 0:
+                        self.logger.info("=" * 60)
+                        self.logger.info("USING PROPER NONCONFORMITY SCORES")
+                        self.logger.info(f"Target coverage: {(1 - self.calib_alpha) * 100:.0f}%")
+                        self.logger.info(f"Computed quantiles: {quant}")
+                        self.logger.info("Scores are properly normalized errors (error/width)")
+                        self.logger.info("=" * 60)
+
                     # Compute label set quantiles and store info
                     self.label_set_generator.calib_masks[t][c] = calib_mask
                     self.label_set_generator.box_quantiles[t, c, i:(i+4)] = quant
@@ -296,7 +333,30 @@ class LearnConformal(RiskControl):
 
                     # Compute other relevant quantities coordinate/score-wise
                     nr_calib_samp = calib_mask.sum().repeat(4)  # Only repeat for current 4 coordinates
-                    pi = pred_intervals.fixed_pi(pred, quant)
+                    
+                    # PROPER INTERVAL COMPUTATION FOR LEARNED SCORES
+                    if "learn_res" in self.collector.score_fields[i]:
+                        # For learned scores, quantile is a ratio (error/width)
+                        # We need to multiply by predicted widths to get actual intervals
+                        
+                        # Get the predicted widths from the model
+                        predicted_widths = torch.zeros((len(ist_list[c]["gt_x0"]), 4), dtype=torch.float32)
+                        for coord_idx in range(4):
+                            width_field = self.collector.score_fields[i + coord_idx]
+                            predicted_widths[:, coord_idx] = torch.tensor(ist_list[c][width_field])
+                        
+                        # Compute calibrated interval widths using quantile ratio
+                        calibrated_widths = predicted_widths * quant  # Broadcasting: [N, 4] * [4]
+                        
+                        # Create prediction intervals properly
+                        # pred has shape [N, 4], coverage expects pi with shape [N, 2, 4]
+                        # where dim 1 is [lower, upper] bounds
+                        lower = pred - calibrated_widths
+                        upper = pred + calibrated_widths
+                        pi = torch.stack([lower, upper], dim=1)  # Shape: [N, 2, 4]
+                    else:
+                        # For other scores (abs_res), use standard fixed intervals
+                        pi = pred_intervals.fixed_pi(pred, quant)
                     cov_coord, cov_box = metrics.coverage(gt[~calib_mask], pi[~calib_mask])
                     cov_area, cov_iou = metrics.stratified_coverage(gt, pi, calib_mask, ist)
                     mpiw = metrics.mean_pi_width(pi[~calib_mask])

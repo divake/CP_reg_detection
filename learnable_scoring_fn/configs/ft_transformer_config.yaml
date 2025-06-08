@@ -1,4 +1,9 @@
 # FT-Transformer specific configuration
+# Inherits from adaptive_config.yaml
+
+# Import base adaptive settings
+__BASE__: adaptive_config.yaml
+
 MODEL:
   TYPE: "ft_transformer"
   FT_TRANSFORMER:
