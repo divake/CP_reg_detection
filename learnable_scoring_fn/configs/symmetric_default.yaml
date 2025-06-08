@@ -13,8 +13,8 @@ activation: relu
 use_batch_norm: true
 
 # Loss function
-target_coverage: 0.9
-lambda_efficiency: 0.1
+target_coverage: 0.89  # Target middle of 88-90.5% range
+lambda_efficiency: 0.3  # Further increased to minimize MPIW
 coverage_loss_type: smooth_l1
 size_normalization: true
 

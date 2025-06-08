@@ -66,10 +66,12 @@ def calibrate_tau(
     coverage_factors = np.array(coverage_factors)
     
     # Compute quantile at target coverage level
-    tau = np.quantile(coverage_factors, target_coverage)
+    # For tighter control, use slightly lower quantile
+    adjusted_quantile = target_coverage - 0.01  # Aim for 89% instead of 90%
+    tau = np.quantile(coverage_factors, adjusted_quantile)
     
-    # Add small safety margin
-    tau = tau * 1.01  # 1% safety margin
+    # No safety margin - we want tight intervals
+    # tau = tau * 1.01  # Removed safety margin
     
     return float(tau)
 
@@ -83,7 +85,7 @@ class TauCalibrator:
         self,
         target_coverage: float = 0.9,
         smoothing_factor: float = 0.7,
-        min_tau: float = 0.5,
+        min_tau: float = 0.1,  # Lowered from 0.5 to allow tighter intervals
         max_tau: float = 5.0,
         safety_margin: float = 0.01
     ):

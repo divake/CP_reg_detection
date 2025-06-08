@@ -389,19 +389,21 @@ def train_symmetric_adaptive(
         # Model checkpointing
         coverage_error = abs(val_metrics['coverage_rate'] - config['target_coverage'])
         
-        # Save best model logic
+        # Save best model logic - prioritize 88-90% coverage range
         save_model = False
         save_reason = ""
         
-        if 0.88 <= val_metrics['coverage_rate'] <= 0.92:
-            if coverage_error < best_coverage_error:
+        if 0.88 <= val_metrics['coverage_rate'] <= 0.905:
+            # In target range - prioritize by MPIW
+            if val_metrics['avg_mpiw'] < best_mpiw:
                 save_model = True
-                save_reason = "Best coverage"
-                best_coverage_error = coverage_error
-            elif coverage_error == best_coverage_error and val_metrics['avg_mpiw'] < best_mpiw:
-                save_model = True
-                save_reason = "Same coverage, better MPIW"
+                save_reason = f"Target coverage ({val_metrics['coverage_rate']:.3f}) with better MPIW"
                 best_mpiw = val_metrics['avg_mpiw']
+                best_coverage_error = coverage_error
+            elif val_metrics['avg_mpiw'] == best_mpiw and coverage_error < best_coverage_error:
+                save_model = True
+                save_reason = "Same MPIW, closer to 89% coverage"
+                best_coverage_error = coverage_error
         
         if save_model:
             checkpoint = {
@@ -441,13 +443,18 @@ def train_symmetric_adaptive(
         # Visualization
         logger.create_visualization(epoch)
         
-        # Early stopping check
+        # Early stopping check based on stable coverage
         if epoch > config.get('warmup_epochs', 5):
-            recent_coverages = history['coverage_rate'][-5:]
-            if all(0.88 <= c <= 0.92 for c in recent_coverages):
-                recent_mpiws = history['avg_mpiw'][-5:]
-                if np.std(recent_mpiws) < 1.0:  # Stable MPIW
-                    print("Early stopping: Stable performance achieved")
+            # Check if we have enough history
+            if len(history.get('coverage_rate', [])) >= 10:
+                recent_coverages = history['coverage_rate'][-10:]
+                # Check if coverage is stable in target range (88-90.5%)
+                if all(0.88 <= c <= 0.905 for c in recent_coverages):
+                    recent_mpiws = history['avg_mpiw'][-10:]
+                    avg_coverage = np.mean(recent_coverages)
+                    std_coverage = np.std(recent_coverages)
+                    print(f"\nEarly stopping: Coverage stable at {avg_coverage:.3f} (±{std_coverage:.3f})")
+                    print(f"Average MPIW over last 10 epochs: {np.mean(recent_mpiws):.2f}")
                     break
     
     # Final summary

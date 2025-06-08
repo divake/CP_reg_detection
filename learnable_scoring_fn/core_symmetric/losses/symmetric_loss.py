@@ -128,18 +128,28 @@ class SymmetricAdaptiveLoss(nn.Module):
             # Average dimension as size proxy
             object_sizes = (box_widths + box_heights) / 2 + 1.0  # +1 to avoid division by zero
             
+            # Compute box areas for size-specific penalties
+            box_areas = box_widths * box_heights
+            
             # Normalized MPIW
             normalized_mpiw = mpiw_per_box / object_sizes
-            efficiency_loss = normalized_mpiw.mean()
+            
+            # Apply stronger penalty for large objects with high MPIW
+            # Large objects (area > 96^2 = 9216) get extra penalty
+            large_object_mask = box_areas > 9216
+            
+            if large_object_mask.any():
+                # Extra penalty for large objects to reduce their MPIW
+                large_object_penalty = normalized_mpiw[large_object_mask].mean() * 0.5
+                efficiency_loss = normalized_mpiw.mean() + large_object_penalty
+            else:
+                efficiency_loss = normalized_mpiw.mean()
         else:
             # Raw MPIW
             efficiency_loss = mpiw_per_box.mean()
             normalized_mpiw = mpiw_per_box  # For logging
         
-        # Total loss
-        total_loss = coverage_loss + self.lambda_efficiency * efficiency_loss
-        
-        # Compute actual coverage rate for monitoring
+        # Compute actual coverage rate for monitoring and additional penalty
         with torch.no_grad():
             # Check if GT is within intervals for all coordinates
             covered_lower = gt_boxes >= lower_bounds  # [batch_size, 4]
@@ -149,6 +159,21 @@ class SymmetricAdaptiveLoss(nn.Module):
             # Box is covered if ALL coordinates are covered
             box_covered = covered.all(dim=1)  # [batch_size]
             coverage_rate = box_covered.float().mean()
+            
+        # Additional penalty for over-coverage (to stay close to target)
+        coverage_penalty = 0.0
+        if coverage_rate > 0.905:  # Over 90.5% coverage
+            over_coverage = (coverage_rate - 0.89) ** 2  # Target 89% to stay in range
+            coverage_penalty = over_coverage * 5.0  # Strong penalty for over-coverage
+        elif coverage_rate < 0.88:  # Under 88% coverage
+            under_coverage = (0.89 - coverage_rate) ** 2
+            coverage_penalty = under_coverage * 10.0  # Very strong penalty for under-coverage
+            
+        # Total loss with coverage penalty
+        total_loss = coverage_loss + self.lambda_efficiency * efficiency_loss + coverage_penalty
+        
+        # Continue with remaining computations for detailed statistics
+        with torch.no_grad():
             
             # Additional statistics
             avg_mpiw = mpiw_per_box.mean()
