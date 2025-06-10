@@ -246,3 +246,6 @@ errors.log
 
 # But keep important documentation images
 !method-diag.jpg
+
+learnable_scoring_fn/cache_*
+verify_claude_autoupdate_disabled.sh
