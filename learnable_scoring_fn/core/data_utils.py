@@ -107,12 +107,21 @@ def process_class_data_safe(class_data_with_id, feature_extractor=None, uncertai
             logger.error(f"Class {class_id}: Error extracting features: {str(e)}")
             return None
         
+        # Get image IDs if available
+        img_ids = None
+        if 'img_id' in class_data:
+            try:
+                img_ids = torch.tensor(class_data['img_id'], dtype=torch.int64)
+            except Exception as e:
+                logger.warning(f"Class {class_id}: Error converting img_id to tensor: {str(e)}")
+        
         return {
             'features': features,
             'pred_coords': pred_coords,
             'gt_coords': gt_coords,
             'confidence': pred_scores,
-            'class_id': class_id
+            'class_id': class_id,
+            'img_ids': img_ids
         }
         
     except Exception as e:
@@ -254,13 +263,23 @@ def extract_features_from_predictions_safe(
         all_pred_coords = torch.cat([r['pred_coords'] for r in valid_results], dim=0)
         all_gt_coords = torch.cat([r['gt_coords'] for r in valid_results], dim=0)
         all_confidence = torch.cat([r['confidence'] for r in valid_results], dim=0)
+        
+        # Combine image IDs if available
+        img_ids_list = [r['img_ids'] for r in valid_results if r['img_ids'] is not None]
+        if img_ids_list:
+            all_img_ids = torch.cat(img_ids_list, dim=0)
+        else:
+            all_img_ids = None
+            
     except Exception as e:
         logger.error(f"Error combining results: {str(e)}")
         raise
     
     logger.info(f"Extracted features for {len(all_features)} predictions")
+    if all_img_ids is not None:
+        logger.info(f"Image IDs available for {len(all_img_ids)} predictions")
     
-    return all_features, all_gt_coords, all_pred_coords, all_confidence
+    return all_features, all_gt_coords, all_pred_coords, all_confidence, all_img_ids
 
 
 # Keep original function names for compatibility
@@ -275,9 +294,17 @@ def extract_features_from_predictions_parallel(predictions: Tuple[Any, Any],
     )
 
 
-def extract_features_from_predictions(predictions: Tuple[Any, Any]) -> Tuple[torch.Tensor, ...]:
+def extract_features_from_predictions(predictions: Tuple[Any, Any], 
+                                     num_workers: int = 8,
+                                     timeout_per_class: int = 60,
+                                     use_sequential_fallback: bool = True) -> Tuple[torch.Tensor, ...]:
     """Extract features from predictions - uses safe parallel version."""
-    return extract_features_from_predictions_safe(predictions)
+    return extract_features_from_predictions_safe(
+        predictions,
+        num_workers=num_workers,
+        timeout_per_class=timeout_per_class,
+        use_sequential_fallback=use_sequential_fallback
+    )
 
 
 # Copy other functions from original
@@ -317,7 +344,9 @@ def prepare_data_splits(
     val_preds: torch.Tensor,
     val_conf: torch.Tensor,
     calib_fraction: float = 0.5,
-    seed: int = 42
+    seed: int = 42,
+    train_img_ids: Optional[torch.Tensor] = None,
+    val_img_ids: Optional[torch.Tensor] = None
 ) -> Dict[str, torch.Tensor]:
     """Prepare train/calibration/test splits."""
     torch.manual_seed(seed)
@@ -329,7 +358,7 @@ def prepare_data_splits(
     calib_idx = perm[:n_calib]
     test_idx = perm[n_calib:]
     
-    return {
+    result = {
         'train_features': train_features,
         'train_gt_coords': train_gt,
         'train_pred_coords': train_preds,
@@ -343,3 +372,12 @@ def prepare_data_splits(
         'test_pred_coords': val_preds[test_idx],
         'test_confidence': val_conf[test_idx]
     }
+    
+    # Add image IDs if available
+    if train_img_ids is not None:
+        result['train_img_ids'] = train_img_ids
+    if val_img_ids is not None:
+        result['calib_img_ids'] = val_img_ids[calib_idx]
+        result['test_img_ids'] = val_img_ids[test_idx]
+    
+    return result

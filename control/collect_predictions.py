@@ -112,8 +112,11 @@ def collect_predictions(cfg, data_list, alpha=0.1, label_set='class_threshold',
             # Store prediction information in a simplified format
             if matches:
                 # Convert to basic data structures for JSON serialization
+                # Use actual COCO image ID instead of loop index
+                actual_image_id = img[0].get("image_id", i)  # Fallback to i if not available
+                
                 img_info = {
-                    'img_id': i,
+                    'img_id': actual_image_id,  # Changed to use actual image ID
                     'height': img[0]["height"],
                     'width': img[0]["width"],
                     'nr_matches': len(gt_class_matched)

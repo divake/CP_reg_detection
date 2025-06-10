@@ -145,7 +145,7 @@ def prepare_features_if_needed(config: Dict[str, Any], logger: logging.Logger) -
     logger.info("Extracting features from training predictions...")
     import time
     start_time = time.time()
-    train_features, train_gt, train_preds, train_conf = extract_features_from_predictions(
+    train_features, train_gt, train_preds, train_conf, train_img_ids = extract_features_from_predictions(
         train_predictions
     )
     logger.info(f"Training features extracted in {time.time() - start_time:.2f} seconds")
@@ -153,7 +153,7 @@ def prepare_features_if_needed(config: Dict[str, Any], logger: logging.Logger) -
     logger.info("Extracting features from validation predictions...")
     start_time = time.time()
     # Use safe parameters to avoid hanging on validation data
-    val_features, val_gt, val_preds, val_conf = extract_features_from_predictions(
+    val_features, val_gt, val_preds, val_conf, val_img_ids = extract_features_from_predictions(
         val_predictions,
         num_workers=8,  # Reduced from 36 to avoid hanging
         timeout_per_class=60,  # Increased timeout
@@ -166,7 +166,9 @@ def prepare_features_if_needed(config: Dict[str, Any], logger: logging.Logger) -
         train_features, train_gt, train_preds, train_conf,
         val_features, val_gt, val_preds, val_conf,
         calib_fraction=config['DATA'].get('CALIB_FRACTION', 0.5),
-        seed=config['TRAINING'].get('SEED', 42)
+        seed=config['TRAINING'].get('SEED', 42),
+        train_img_ids=train_img_ids,
+        val_img_ids=val_img_ids
     )
     
     # Save features for future use
@@ -177,12 +179,20 @@ def prepare_features_if_needed(config: Dict[str, Any], logger: logging.Logger) -
         'confidence': data_splits['train_confidence']
     }
     
+    # Add train image IDs if available
+    if 'train_img_ids' in data_splits:
+        train_data['img_ids'] = data_splits['train_img_ids']
+    
     val_data = {
         'features': torch.cat([data_splits['calib_features'], data_splits['test_features']]),
         'gt_coords': torch.cat([data_splits['calib_gt_coords'], data_splits['test_gt_coords']]),
         'pred_coords': torch.cat([data_splits['calib_pred_coords'], data_splits['test_pred_coords']]),
         'confidence': torch.cat([data_splits['calib_confidence'], data_splits['test_confidence']])
     }
+    
+    # Add validation image IDs if available
+    if 'calib_img_ids' in data_splits and 'test_img_ids' in data_splits:
+        val_data['img_ids'] = torch.cat([data_splits['calib_img_ids'], data_splits['test_img_ids']])
     
     # Also save calibration indices for later use
     n_calib = len(data_splits['calib_features'])
