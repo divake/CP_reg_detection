@@ -40,10 +40,13 @@ class AdaptiveConformalLogger:
             experiment_name = f"symmetric_adaptive_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.experiment_name = experiment_name
         
-        # Create subdirectories
-        self.csv_dir = self.log_dir / "csv"
-        self.json_dir = self.log_dir / "json"
-        self.plot_dir = self.log_dir / "plots"
+        # Create experiment-specific subdirectories
+        self.experiment_dir = self.log_dir / experiment_name
+        self.experiment_dir.mkdir(exist_ok=True)
+        
+        self.csv_dir = self.experiment_dir / "csv"
+        self.json_dir = self.experiment_dir / "json"
+        self.plot_dir = self.experiment_dir / "plots"
         
         for dir in [self.csv_dir, self.json_dir, self.plot_dir]:
             dir.mkdir(exist_ok=True)
@@ -204,10 +207,15 @@ class AdaptiveConformalLogger:
         print(f"  Coverage: {metrics.get('coverage_rate', 0):.3f}")
         print(f"  MPIW: {metrics.get('avg_mpiw', 0):.2f}")
     
-    def create_visualization(self, epoch: int):
-        """Create and save visualization plots."""
-        if epoch % 10 != 0 and epoch != self.history['epoch'][-1]:
-            return  # Only plot every 10 epochs and at the end
+    def create_visualization(self, epoch: int, update_frequency: int = 1):
+        """Create and save visualization plots.
+        
+        Args:
+            epoch: Current epoch number
+            update_frequency: How often to update the plot (default: every epoch)
+        """
+        if epoch % update_frequency != 0 and epoch != self.history['epoch'][-1]:
+            return  # Skip plotting based on frequency
         
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         
@@ -259,7 +267,8 @@ class AdaptiveConformalLogger:
         ax.set_title('Width Distribution by Object Size')
         
         plt.tight_layout()
-        plt.savefig(self.plot_dir / f"{self.experiment_name}_epoch_{epoch}.png",
+        # Save to a single file that gets updated each time
+        plt.savefig(self.plot_dir / f"{self.experiment_name}_training_progress.png",
                     dpi=150, bbox_inches='tight')
         plt.close()
     

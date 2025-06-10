@@ -84,16 +84,21 @@ def main():
         print("TRAINING COMPLETED SUCCESSFULLY!")
         print("="*80)
         
-        # Extract results based on the return type
-        if isinstance(results, tuple):
-            # Handle tuple return
-            best_tau, best_coverage, best_mpiw = results[:3]
-            print(f"Final tau: {best_tau:.4f}")
-            print(f"Final coverage: {best_coverage:.1%}")
-            print(f"Final MPIW: {best_mpiw:.1f} pixels")
+        # Extract results - returns (model, tau, history)
+        if isinstance(results, tuple) and len(results) >= 3:
+            model, final_tau, history = results
+            # Get final metrics from history
+            if 'val_coverage' in history and len(history['val_coverage']) > 0:
+                final_coverage = history['val_coverage'][-1]
+                final_mpiw = history['val_mpiw'][-1] if 'val_mpiw' in history else 0
+                print(f"Final tau: {final_tau:.4f}")
+                print(f"Final coverage: {final_coverage:.1%}")
+                print(f"Final MPIW: {final_mpiw:.1f} pixels")
+            else:
+                print(f"Final tau: {final_tau:.4f}")
+                print("Training completed successfully")
         else:
-            # Handle dict return
-            print(f"Training completed with results")
+            print("Training completed with results")
         
         print("\nExpected benefits:")
         print("- Small objects: High coverage with minimal MPIW increase")

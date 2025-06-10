@@ -22,12 +22,20 @@ lambda_efficiency: 0.40       # Higher weight to push down large object MPIW
 coverage_loss_type: smooth_l1
 size_normalization: true
 
+# Size targets for display
+size_targets:
+  small: 0.90
+  medium: 0.89
+  large: 0.85
+
 # Size thresholds (based on sqrt of area)
 small_threshold: 32.0   # Objects smaller than 32x32
 large_threshold: 96.0   # Objects larger than 96x96
 
 # Calibration
 target_coverage: 0.89   # Overall target (for tau calibration)
+min_coverage: 0.88     # Minimum acceptable coverage
+max_coverage: 0.905    # Maximum acceptable coverage
 tau_smoothing: 0.6
 min_tau: 0.05          # Allow very tight intervals
 max_tau: 3.0

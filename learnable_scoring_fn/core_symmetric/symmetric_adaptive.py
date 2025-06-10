@@ -188,12 +188,23 @@ def train_symmetric_adaptive(
         output_dir: Directory to save models
         log_dir: Directory for logs
     """
-    # Create directories
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    # Generate experiment name with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    experiment_name = f"symmetric_adaptive_{timestamp}"
     
-    # Initialize logger
-    logger = AdaptiveConformalLogger(log_dir)
+    # Create organized directory structure for this run
+    experiment_dir = Path(output_dir) / experiment_name
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create subdirectories
+    model_dir = experiment_dir / "models"
+    model_dir.mkdir(exist_ok=True)
+    plot_dir = experiment_dir / "plots"
+    plot_dir.mkdir(exist_ok=True)
+    
+    # Initialize logger with experiment-specific directory
+    logger = AdaptiveConformalLogger(log_dir, experiment_name)
     
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -259,12 +270,29 @@ def train_symmetric_adaptive(
     print(f"Parameters: {sum(p.numel() for p in model.parameters())}")
     
     # Initialize loss function
-    criterion = SymmetricAdaptiveLoss(
-        target_coverage=config['target_coverage'],
-        lambda_efficiency=config['lambda_efficiency'],
-        coverage_loss_type=config.get('coverage_loss_type', 'smooth_l1'),
-        size_normalization=config.get('size_normalization', True)
-    )
+    if config.get('use_size_aware_loss', False):
+        from .losses.size_aware_loss import SizeAwareSymmetricLoss
+        criterion = SizeAwareSymmetricLoss(
+            small_target_coverage=config.get('small_target_coverage', 0.90),
+            medium_target_coverage=config.get('medium_target_coverage', 0.89),
+            large_target_coverage=config.get('large_target_coverage', 0.85),
+            lambda_efficiency=config['lambda_efficiency'],
+            coverage_loss_type=config.get('coverage_loss_type', 'smooth_l1'),
+            size_normalization=config.get('size_normalization', True),
+            small_threshold=config.get('small_threshold', 32.0),
+            large_threshold=config.get('large_threshold', 96.0)
+        )
+        print("Using SizeAwareSymmetricLoss with targets:")
+        print(f"  Small objects (<{config.get('small_threshold', 32.0)}): {config.get('small_target_coverage', 0.90):.0%}")
+        print(f"  Medium objects: {config.get('medium_target_coverage', 0.89):.0%}")
+        print(f"  Large objects (>{config.get('large_threshold', 96.0)}): {config.get('large_target_coverage', 0.85):.0%}")
+    else:
+        criterion = SymmetricAdaptiveLoss(
+            target_coverage=config['target_coverage'],
+            lambda_efficiency=config['lambda_efficiency'],
+            coverage_loss_type=config.get('coverage_loss_type', 'smooth_l1'),
+            size_normalization=config.get('size_normalization', True)
+        )
     
     # Initialize optimizer
     optimizer = optim.AdamW(
@@ -386,23 +414,25 @@ def train_symmetric_adaptive(
         
         logger.log_validation_phase(epoch, val_metrics, size_metrics)
         
-        # Model checkpointing
+        # Smart model checkpointing
         coverage_error = abs(val_metrics['coverage_rate'] - config['target_coverage'])
+        min_target_coverage = config.get('min_coverage', 0.88)
+        max_target_coverage = config.get('max_coverage', 0.905)
         
-        # Save best model logic - prioritize 88-90% coverage range
+        # Save best model logic - prioritize coverage in target range with lowest MPIW
         save_model = False
         save_reason = ""
         
-        if 0.88 <= val_metrics['coverage_rate'] <= 0.905:
+        if min_target_coverage <= val_metrics['coverage_rate'] <= max_target_coverage:
             # In target range - prioritize by MPIW
             if val_metrics['avg_mpiw'] < best_mpiw:
                 save_model = True
-                save_reason = f"Target coverage ({val_metrics['coverage_rate']:.3f}) with better MPIW"
+                save_reason = f"Target coverage ({val_metrics['coverage_rate']:.3f}) with better MPIW ({val_metrics['avg_mpiw']:.1f})"
                 best_mpiw = val_metrics['avg_mpiw']
                 best_coverage_error = coverage_error
-            elif val_metrics['avg_mpiw'] == best_mpiw and coverage_error < best_coverage_error:
+            elif abs(val_metrics['avg_mpiw'] - best_mpiw) < 0.1 and coverage_error < best_coverage_error:
                 save_model = True
-                save_reason = "Same MPIW, closer to 89% coverage"
+                save_reason = f"Similar MPIW, closer to {config['target_coverage']:.0%} coverage"
                 best_coverage_error = coverage_error
         
         if save_model:
@@ -412,20 +442,19 @@ def train_symmetric_adaptive(
                 'model_config': model.get_config(),
                 'tau': current_tau,
                 'metrics': val_metrics,
-                'size_metrics': size_metrics
+                'size_metrics': size_metrics,
+                'config': config
             }
-            torch.save(checkpoint, output_path / 'best_model.pt')
+            # Save with descriptive filename
+            model_filename = f'best_model_cov{val_metrics["coverage_rate"]:.3f}_mpiw{val_metrics["avg_mpiw"]:.1f}.pt'
+            torch.save(checkpoint, model_dir / model_filename)
+            # Also save as 'best_model.pt' for easy access
+            torch.save(checkpoint, model_dir / 'best_model.pt')
             logger.log_best_model(epoch, save_reason, val_metrics)
         
-        # Periodic checkpoint
-        if epoch % 10 == 0:
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'tau': current_tau,
-                'history': history
-            }, output_path / f'checkpoint_epoch_{epoch}.pt')
+        # Only save checkpoints when significant progress is made
+        # No need to save every 10 epochs - just save when we have a good model
+        # This reduces clutter and focuses on meaningful checkpoints
         
         # Update history
         for key, value in val_metrics.items():
@@ -460,10 +489,7 @@ def train_symmetric_adaptive(
     # Final summary
     logger.save_final_summary()
     
-    # Save final plots
-    plot_dir = Path(log_dir) / "plots"
-    plot_dir.mkdir(exist_ok=True)
-    
+    # Save final plots to experiment directory
     plot_training_results(
         history,
         save_path=plot_dir / "final_training_results.png",
@@ -476,6 +502,25 @@ def train_symmetric_adaptive(
         save_path=plot_dir / "tau_evolution.png",
         show=False
     )
+    
+    # Save configuration for reproducibility
+    import yaml
+    with open(experiment_dir / "config.yaml", 'w') as f:
+        yaml.dump(config, f)
+    
+    # Save final results summary
+    final_results = {
+        'experiment_name': experiment_name,
+        'final_tau': current_tau,
+        'final_coverage': history['coverage_rate'][-1] if 'coverage_rate' in history else 0,
+        'final_mpiw': history['avg_mpiw'][-1] if 'avg_mpiw' in history else 0,
+        'best_model_saved': (model_dir / 'best_model.pt').exists(),
+        'total_epochs': epoch,
+        'size_metrics': size_metrics if 'size_metrics' in locals() else None
+    }
+    
+    with open(experiment_dir / "final_results.json", 'w') as f:
+        json.dump(final_results, f, indent=2)
     
     print(f"\nTraining completed!")
     print(f"Final tau: {current_tau:.4f}")
