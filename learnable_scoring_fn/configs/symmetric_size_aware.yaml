@@ -2,10 +2,10 @@
 # Targets: Small objects 90%, Medium 89%, Large 85%
 
 # Training parameters
-learning_rate: 0.001
+learning_rate: 0.0005  # Lower LR for more stable training with new activation
 epochs: 100
 batch_size: 256
-early_stopping_patience: 15
+early_stopping_patience: 20  # More patience for new model dynamics
 
 # Model architecture
 hidden_dims: [256, 128, 64]  # Deeper network for size-aware adaptation
@@ -18,7 +18,7 @@ use_size_aware_loss: true
 small_target_coverage: 0.90   # Target 90% for small objects
 medium_target_coverage: 0.89  # Target 89% for medium objects  
 large_target_coverage: 0.85   # Target 85% for large objects
-lambda_efficiency: 0.40       # Higher weight to push down large object MPIW
+lambda_efficiency: 0.25       # Reduced to prevent aggressive minimization leading to collapse
 coverage_loss_type: smooth_l1
 size_normalization: true
 
@@ -37,14 +37,14 @@ target_coverage: 0.89   # Overall target (for tau calibration)
 min_coverage: 0.88     # Minimum acceptable coverage
 max_coverage: 0.905    # Maximum acceptable coverage
 tau_smoothing: 0.6
-min_tau: 0.05          # Allow very tight intervals
-max_tau: 3.0
+min_tau: 0.2           # Higher min tau to work with new model scale
+max_tau: 5.0           # Higher max tau for new model dynamics
 
 # Optimization
 lr_scheduler: cosine
 min_lr: 0.0000001
 weight_decay: 0.0001
-grad_clip_norm: 1.0
+grad_clip_norm: 0.5  # More aggressive clipping for stability
 warmup_epochs: 3
 
 # Data augmentation

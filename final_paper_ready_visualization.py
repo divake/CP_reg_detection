@@ -212,7 +212,7 @@ def main():
     
     # Load symmetric model
     print("\nLoading symmetric adaptive model...")
-    experiment_dir = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/symmetric_adaptive_20250609_191458"
+    experiment_dir = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/symmetric_adaptive_20250612_081616"
     symmetric_model, tau = load_symmetric_model(experiment_dir)
     print(f"Loaded model with tau={tau:.4f}")
     

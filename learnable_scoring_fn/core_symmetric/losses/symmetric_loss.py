@@ -245,3 +245,91 @@ class SmoothQuantileLoss(nn.Module):
         )
         
         return quantile_loss
+
+
+class CoverageDropoutLoss(nn.Module):
+    """
+    Loss function with coverage dropout to prevent collapse.
+    
+    Key features:
+    - Varying coverage targets during training
+    - Strong diversity penalty
+    - Adaptive weighting based on coverage accuracy
+    """
+    
+    def __init__(self, base_coverage=0.9, coverage_range=(0.8, 0.95)):
+        super().__init__()
+        self.base_coverage = base_coverage
+        self.coverage_range = coverage_range
+        
+    def forward(self, pred_widths, pred_boxes, gt_boxes, target_coverage, box_areas=None):
+        """
+        Compute loss with coverage dropout.
+        
+        Args:
+            pred_widths: Predicted interval widths [batch_size, 4]
+            pred_boxes: Predicted bounding boxes [batch_size, 4]
+            gt_boxes: Ground truth boxes [batch_size, 4]
+            target_coverage: Target coverage for this batch
+            box_areas: Optional box areas for size normalization
+            
+        Returns:
+            total_loss: Scalar loss
+            metrics: Dictionary of metrics
+        """
+        # Form intervals
+        lower = pred_boxes - pred_widths
+        upper = pred_boxes + pred_widths
+        
+        # Check coverage
+        covered = ((gt_boxes >= lower) & (gt_boxes <= upper)).all(dim=1).float()
+        actual_coverage = covered.mean()
+        
+        # Coverage loss - must match target
+        coverage_loss = F.smooth_l1_loss(
+            actual_coverage, 
+            torch.tensor(target_coverage, device=actual_coverage.device)
+        )
+        
+        # Efficiency loss - minimize width
+        if box_areas is not None:
+            # Normalize by box size
+            box_sizes = torch.sqrt(box_areas).clamp(min=1.0)
+            normalized_widths = pred_widths / box_sizes.unsqueeze(1)
+            efficiency_loss = normalized_widths.mean()
+        else:
+            # Use box dimensions from gt_boxes
+            box_widths = (gt_boxes[:, 2] - gt_boxes[:, 0]).clamp(min=1.0)
+            box_heights = (gt_boxes[:, 3] - gt_boxes[:, 1]).clamp(min=1.0)
+            box_sizes = torch.sqrt(box_widths * box_heights).unsqueeze(1)
+            normalized_widths = pred_widths / box_sizes
+            efficiency_loss = normalized_widths.mean()
+        
+        # Diversity loss - prevent collapse
+        # Strong penalty for low variance
+        width_std = pred_widths.std()
+        diversity_loss = torch.relu(5.0 - width_std) ** 2  # Target std > 5.0
+        
+        # Adaptive weighting based on coverage accuracy
+        coverage_error = abs(actual_coverage - target_coverage)
+        coverage_weight = 10.0 if coverage_error > 0.05 else 1.0
+        
+        # Total loss
+        total_loss = (coverage_weight * coverage_loss + 
+                     0.1 * efficiency_loss + 
+                     0.5 * diversity_loss)
+        
+        # Compute MPIW
+        mpiw = (2 * pred_widths).mean()
+        
+        metrics = {
+            'coverage': actual_coverage.item(),
+            'efficiency': efficiency_loss.item(),
+            'diversity': width_std.item(),
+            'coverage_loss': coverage_loss.item(),
+            'diversity_loss': diversity_loss.item(),
+            'mpiw': mpiw.item(),
+            'width_std': width_std.item()
+        }
+        
+        return total_loss, metrics
