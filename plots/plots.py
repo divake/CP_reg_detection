@@ -494,7 +494,7 @@ def get_pred(args, controller, model, img, img_id, idx, filter_for_class, filter
 
     return gt, pred_match, box_quant, box_quant_true, lab_gt, lab_pred, lab_set
 
-def plot_multi_method_comparison(img_name="000000054593", class_name="person", dataset="coco_val", device="cuda:1", to_file=True):
+def plot_multi_method_comparison(img_name="000000224222", class_name="person", dataset="coco_val", device="cuda:1", to_file=True):
     """
     Plot prediction intervals for a specific image using multiple methods (std, ens, cqr, learn)
     """
@@ -1993,11 +1993,85 @@ def run_all_plots(dataset="coco_val", class_name="person", device="cuda:1", img_
     print("\n" + "="*50)
     print("✓ All plots completed successfully!")
 
-if __name__ == "__main__":
-    # Parameters as requested: use "person" class and COCO dataset only
-    run_all_plots(
+def plot_beach_image_comparison():
+    """
+    Plot image 000000224222 (beach/surfing scene) for all 4 scoring methods.
+    This image achieved 100% coverage in experiments.
+    """
+    print("\n" + "="*50)
+    print("Generating comparison plots for beach image (000000224222)")
+    print("This image achieved 100% coverage with 4 objects detected")
+    print("="*50)
+    
+    plot_multi_method_comparison(
+        img_name="000000224222",
+        class_name="person",
         dataset="coco_val",
-        class_name="person", 
         device="cuda:1",
-        img_name="000000054593"
+        to_file=True
     )
+    
+    print("\nExpected output files:")
+    methods = ["std_conf", "ens_conf", "cqr_conf", "learn_conf"]
+    for method in methods:
+        print(f"  - /ssd_4TB/divake/conformal-od/output/plots/{method}_class_threshold_person_img000000224222.jpg")
+
+def plot_multi_object_image_comparison():
+    """
+    Plot image 000000222458 for all 4 scoring methods with ALL objects detected.
+    This image has 8 objects and achieved 100% coverage in experiments.
+    """
+    print("\n" + "="*50)
+    print("Generating comparison plots for multi-object image (000000222458)")
+    print("This image achieved 100% coverage with 8 objects detected")
+    print("ALL object classes will be detected (no person-only filter)")
+    print("="*50)
+    
+    plot_multi_method_comparison(
+        img_name="000000222458",
+        class_name=None,  # None means detect all classes
+        dataset="coco_val",
+        device="cuda:1",
+        to_file=True
+    )
+    
+    print("\nExpected output files:")
+    methods = ["std_conf", "ens_conf", "cqr_conf", "learn_conf"]
+    for method in methods:
+        # Note: when class_name is None, the filename uses "all" instead of a class name
+        print(f"  - /ssd_4TB/divake/conformal-od/output/plots/{method}_class_threshold_all_img000000222458.jpg")
+
+def plot_both_high_coverage_images():
+    """
+    Plot both high coverage images that achieved 100% coverage:
+    1. Beach scene (000000224222) - 4 objects, person class only
+    2. Multi-object scene (000000222458) - 8 objects, all classes
+    """
+    print("\n" + "="*60)
+    print("GENERATING PLOTS FOR BOTH HIGH COVERAGE IMAGES")
+    print("="*60)
+    
+    # First: Beach scene with person filter
+    plot_beach_image_comparison()
+    
+    # Second: Multi-object scene with all classes
+    plot_multi_object_image_comparison()
+    
+    print("\n" + "="*60)
+    print("✓ All high coverage image plots completed!")
+    print("="*60)
+
+if __name__ == "__main__":
+    # Generate comparison plots for multi-object image (000000222458) with ALL objects
+    plot_multi_object_image_comparison()
+    
+    # Uncomment below to run other comparisons:
+    # plot_beach_image_comparison()  # Beach image with person class only
+    
+    # Uncomment below to run all plots for a specific image
+    # run_all_plots(
+    #     dataset="coco_val",
+    #     class_name=None,  # Set to None for all classes, or "person" for person only
+    #     device="cuda:1",
+    #     img_name="000000222458"
+    # )
