@@ -1,0 +1,9 @@
+{
+  "decisions": [],
+  "adaptive_strategies": {
+    "coverage_too_low": ["increase_coverage_weight", "reduce_learning_rate", "decrease_efficiency_weight"],
+    "coverage_too_high": ["decrease_coverage_weight", "increase_efficiency_weight", "increase_model_capacity"],
+    "mpiw_not_improving": ["increase_model_capacity", "try_different_activation", "add_residual_connections", "increase_dropout"],
+    "training_unstable": ["reduce_learning_rate", "add_batch_normalization", "gradient_clipping", "smaller_batch_size"]
+  }
+}

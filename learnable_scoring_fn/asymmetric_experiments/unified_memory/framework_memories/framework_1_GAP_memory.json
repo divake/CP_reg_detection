@@ -1,0 +1,293 @@
+{
+  "framework_name": "GAP",
+  "status": "failed",
+  "attempts": [
+    {
+      "attempt_number": 1,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64
+        ],
+        "dropout": 0.1,
+        "activation": "elu",
+        "learning_rate": 0.0005,
+        "batch_size": 512,
+        "lambda_efficiency": 0.25,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 97.7535994052887
+    },
+    {
+      "attempt_number": 2,
+      "architecture": {
+        "hidden_dims": [
+          512,
+          256,
+          128
+        ],
+        "dropout": 0.1,
+        "activation": "elu",
+        "learning_rate": 0.00025,
+        "batch_size": 512,
+        "lambda_efficiency": 0.2,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 96.40305733680725
+    },
+    {
+      "attempt_number": 3,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64,
+          32
+        ],
+        "dropout": 0.1,
+        "activation": "elu",
+        "learning_rate": 0.000125,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15000000000000002,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 105.95140933990479
+    },
+    {
+      "attempt_number": 4,
+      "architecture": {
+        "hidden_dims": [
+          512,
+          256,
+          128
+        ],
+        "dropout": 0.2,
+        "activation": "relu",
+        "learning_rate": 6.25e-05,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 99.38195776939392
+    },
+    {
+      "attempt_number": 5,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64,
+          32
+        ],
+        "dropout": 0.2,
+        "activation": "relu",
+        "learning_rate": 3.125e-05,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 102.30755662918091
+    },
+    {
+      "attempt_number": 6,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64
+        ],
+        "dropout": 0.1,
+        "activation": "elu",
+        "learning_rate": 0.001,
+        "batch_size": 512,
+        "lambda_efficiency": 0.01,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9,
+        "min_tau": 1.0,
+        "max_tau": 20.0
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 99.95306825637817
+    },
+    {
+      "attempt_number": 7,
+      "architecture": {
+        "hidden_dims": [
+          512,
+          256,
+          128
+        ],
+        "dropout": 0.2,
+        "activation": "relu",
+        "learning_rate": 0.0005,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9,
+        "min_tau": 1.0,
+        "max_tau": 20.0
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 101.18143129348755
+    },
+    {
+      "attempt_number": 8,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64,
+          32
+        ],
+        "dropout": 0.2,
+        "activation": "relu",
+        "learning_rate": 0.00025,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9,
+        "min_tau": 1.0,
+        "max_tau": 20.0
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 110.04096674919128
+    },
+    {
+      "attempt_number": 9,
+      "architecture": {
+        "hidden_dims": [
+          512,
+          256,
+          128
+        ],
+        "dropout": 0.2,
+        "activation": "relu",
+        "learning_rate": 0.000125,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9,
+        "min_tau": 1.0,
+        "max_tau": 20.0
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 101.61980366706848
+    },
+    {
+      "attempt_number": 10,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64,
+          32
+        ],
+        "dropout": 0.0,
+        "activation": "elu",
+        "learning_rate": 6.25e-05,
+        "batch_size": 512,
+        "lambda_efficiency": 0.15,
+        "scheduler": "cosine",
+        "epochs": 50,
+        "patience": 10,
+        "target_coverage": 0.9,
+        "min_tau": 1.0,
+        "max_tau": 20.0
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage too low (0.000), need to reduce efficiency weight",
+      "total_time": 102.55056667327881
+    }
+  ],
+  "best_result": null,
+  "total_attempts": 10,
+  "time_spent": "0h",
+  "start_time": "2025-01-26T10:30:00",
+  "final_decision": "Could not achieve target after 10 attempts",
+  "target_metrics": {
+    "coverage_range": [
+      0.88,
+      0.92
+    ],
+    "target_coverage": 0.9,
+    "min_mpiw_reduction": 0.15
+  }
+}
