@@ -1,6 +1,6 @@
 """
-Training script for GAP (Gated Asymmetry with Stable Parameterization)
-Autonomous training with adaptive hyperparameter tuning
+Training script for OAGA (Ordering-Aware Gated Asymmetry)
+Implements gradual asymmetry learning with strong ordering constraints
 """
 
 import os
@@ -17,65 +17,49 @@ import numpy as np
 # Add parent directory to path
 sys.path.append('/ssd_4TB/divake/conformal-od/learnable_scoring_fn')
 
-# Import baseline utilities
-# We'll do manual tau calibration
-
 # Import GAP components
-sys.path.append('/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/frameworks/GAP')
-from models.gap_model import GatedAsymmetryNetwork
-from losses.gap_loss import GAPLoss
+sys.path.append('/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/frameworks/OAGA')
+from models.oaga_model import OrderingAwareGatedAsymmetry
+from losses.oaga_loss import OAGALoss
 
 
-class GAPTrainer:
+class OAGATrainer:
     def __init__(self, config, attempt_number):
         self.config = config
         self.attempt_number = attempt_number
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # Setup directories
-        self.framework_dir = '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/frameworks/GAP'
+        self.framework_dir = '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/frameworks/OAGA'
         self.attempt_dir = os.path.join(self.framework_dir, f'attempt_{attempt_number}')
         os.makedirs(self.attempt_dir, exist_ok=True)
         os.makedirs(os.path.join(self.attempt_dir, 'checkpoints'), exist_ok=True)
         
-        # Initialize model
-        self.model = GatedAsymmetryNetwork(
+        # Initialize model with symmetric initialization
+        self.model = OrderingAwareGatedAsymmetry(
             hidden_dims=config.get('hidden_dims', [256, 128, 64]),
             dropout=config.get('dropout', 0.1),
-            activation=config.get('activation', 'elu')
+            activation=config.get('activation', 'elu'),
+            symmetric_init=config.get('symmetric_init', True)
         ).to(self.device)
         
         # Initialize loss
-        self.loss_fn = GAPLoss(config)
+        self.loss_fn = OAGALoss(config)
         
-        # Initialize optimizer
+        # Initialize optimizer with lower learning rate for stability
         self.optimizer = optim.AdamW(
             self.model.parameters(),
-            lr=config.get('learning_rate', 5e-4),
+            lr=config.get('learning_rate', 1e-4),
             weight_decay=config.get('weight_decay', 1e-4)
         )
         
         # Initialize scheduler
-        if config.get('scheduler', 'cosine') == 'cosine':
-            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer,
-                T_max=config.get('epochs', 50)
-            )
-        elif config.get('scheduler') == 'step':
-            self.scheduler = optim.lr_scheduler.StepLR(
-                self.optimizer,
-                step_size=10,
-                gamma=0.5
-            )
-        else:
-            self.scheduler = None
-        
-        # Initialize tau parameters (we'll do manual calibration)
-        self.current_tau = 1.0
-        self.min_tau = config.get('min_tau', 0.2)
-        self.max_tau = config.get('max_tau', 5.0)
-        self.tau_smoothing = config.get('tau_smoothing', 0.6)
-        self.tau_history = []
+        self.scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            self.optimizer,
+            T_0=10,
+            T_mult=2,
+            eta_min=1e-6
+        )
         
         # Load cached data
         cache_dir = '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model'
@@ -100,9 +84,10 @@ class GAPTrainer:
         
         self.train_loader = DataLoader(
             train_dataset,
-            batch_size=config.get('batch_size', 512),
+            batch_size=config.get('batch_size', 256),  # Smaller batch size for stability
             shuffle=True,
-            num_workers=4
+            num_workers=4,
+            pin_memory=True
         )
         
         calib_dataset = TensorDataset(
@@ -114,9 +99,10 @@ class GAPTrainer:
         
         self.cal_loader = DataLoader(
             calib_dataset,
-            batch_size=config.get('batch_size', 512),
+            batch_size=config.get('batch_size', 256),
             shuffle=False,
-            num_workers=4
+            num_workers=4,
+            pin_memory=True
         )
         
         eval_dataset = TensorDataset(
@@ -128,9 +114,10 @@ class GAPTrainer:
         
         self.eval_loader = DataLoader(
             eval_dataset,
-            batch_size=config.get('batch_size', 512),
+            batch_size=config.get('batch_size', 256),
             shuffle=False,
-            num_workers=4
+            num_workers=4,
+            pin_memory=True
         )
         
         # Tracking variables
@@ -139,9 +126,18 @@ class GAPTrainer:
         self.patience_counter = 0
         self.training_history = []
         
+        # Tau calibration parameters
+        self.current_tau = config.get('initial_tau', 1.0)
+        self.min_tau = config.get('min_tau', 0.5)
+        self.max_tau = config.get('max_tau', 10.0)
+        self.tau_smoothing = config.get('tau_smoothing', 0.7)
+        self.tau_history = []
+        
     def train_epoch(self, epoch):
         """Train for one epoch"""
         self.model.train()
+        self.loss_fn.set_epoch(epoch)  # Update epoch for warmup
+        
         total_loss = 0.0
         all_metrics = []
         
@@ -158,20 +154,20 @@ class GAPTrainer:
             # Compute loss
             loss, metrics = self.loss_fn(inner_offset, outer_offset, boxes, ground_truth)
             
-            # Backward pass
+            # Backward pass with gradient clipping
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
             
             total_loss += loss.item()
             all_metrics.append(metrics)
             
             # Log progress
-            if batch_idx % 10 == 0:
+            if batch_idx % 20 == 0:
                 print(f"Epoch {epoch}, Batch {batch_idx}/{len(self.train_loader)}, "
                       f"Loss: {loss.item():.4f}, Coverage: {metrics['overall_coverage']:.3f}, "
-                      f"MPIW: {metrics['overall_mpiw']:.2f}")
+                      f"MPIW: {metrics['overall_mpiw']:.2f}, Ordering Viol: {metrics['ordering_violations']:.3f}")
         
         # Aggregate metrics
         avg_loss = total_loss / len(self.train_loader)
@@ -181,11 +177,11 @@ class GAPTrainer:
     
     def calibrate(self, epoch):
         """Calibrate tau using calibration set"""
-        if epoch < 1:  # Skip calibration for first epoch
+        if epoch < 5:  # Wait a few epochs before calibrating
             return
         
         self.model.eval()
-        all_min_factors = []
+        all_coverage_factors = []
         
         with torch.no_grad():
             for batch in self.cal_loader:
@@ -197,32 +193,42 @@ class GAPTrainer:
                 # Get predictions
                 inner_offset, outer_offset = self.model(features, boxes)
                 
-                # Compute minimum scaling factor needed
+                # Compute boxes
                 inner_boxes = boxes + inner_offset
                 outer_boxes = boxes + outer_offset
                 
-                # Check coverage for different scaling factors
-                for factor in torch.linspace(0.5, 2.0, 50):
-                    scaled_inner = boxes + inner_offset * factor
-                    scaled_outer = boxes + outer_offset * factor
+                # Find minimum tau for coverage
+                current_tau = self.model.get_tau()
+                
+                # Binary search for optimal tau per example
+                for i in range(boxes.shape[0]):
+                    low, high = 0.1, 5.0
+                    for _ in range(10):  # Binary search iterations
+                        mid = (low + high) / 2
+                        test_inner = boxes[i] + inner_offset[i] * mid / current_tau
+                        test_outer = boxes[i] + outer_offset[i] * mid / current_tau
+                        
+                        # Check coverage
+                        covered = ((ground_truth[i] >= test_inner) & (ground_truth[i] <= test_outer)).all()
+                        
+                        if covered:
+                            high = mid
+                        else:
+                            low = mid
                     
-                    # Check if GT is covered
-                    covered = ((ground_truth >= scaled_inner) & (ground_truth <= scaled_outer)).all(dim=1)
-                    
-                    if covered.all():
-                        all_min_factors.append(factor.item())
-                        break
+                    all_coverage_factors.append(high)
         
         # Calibrate tau
-        if all_min_factors:
+        if all_coverage_factors:
             target_coverage = self.config.get('target_coverage', 0.90)
-            quantile_idx = int(len(all_min_factors) * (target_coverage - 0.01))
-            new_tau = sorted(all_min_factors)[quantile_idx]
+            quantile_idx = int(len(all_coverage_factors) * target_coverage)
+            new_tau = sorted(all_coverage_factors)[quantile_idx]
             
-            # Update tau with smoothing
+            # Smooth update
             current_tau = self.model.get_tau()
             smoothed_tau = self.tau_smoothing * current_tau + (1 - self.tau_smoothing) * new_tau
             smoothed_tau = np.clip(smoothed_tau, self.min_tau, self.max_tau)
+            
             self.model.set_tau(smoothed_tau)
             self.tau_history.append(smoothed_tau)
             
@@ -270,8 +276,8 @@ class GAPTrainer:
         """Main training loop"""
         start_time = time.time()
         
-        for epoch in range(self.config.get('epochs', 50)):
-            print(f"\n--- Epoch {epoch+1}/{self.config.get('epochs', 50)} ---")
+        for epoch in range(self.config.get('epochs', 100)):  # More epochs for gradual learning
+            print(f"\n--- Epoch {epoch+1}/{self.config.get('epochs', 100)} ---")
             
             # Training phase
             train_loss, train_metrics = self.train_epoch(epoch)
@@ -283,8 +289,7 @@ class GAPTrainer:
             val_metrics, is_best = self.validate(epoch)
             
             # Update scheduler
-            if self.scheduler is not None:
-                self.scheduler.step()
+            self.scheduler.step()
             
             # Log results
             epoch_results = {
@@ -293,32 +298,31 @@ class GAPTrainer:
                 'train_metrics': train_metrics,
                 'val_metrics': val_metrics,
                 'tau': self.model.get_tau(),
-                'is_best': is_best
+                'is_best': is_best,
+                'learning_rate': self.optimizer.param_groups[0]['lr']
             }
             self.training_history.append(epoch_results)
             
             print(f"Validation - Coverage: {val_metrics['overall_coverage']:.3f}, "
                   f"MPIW: {val_metrics['overall_mpiw']:.2f}, "
-                  f"MPIW Small: {val_metrics['mpiw_small']:.2f}, "
-                  f"MPIW Medium: {val_metrics['mpiw_medium']:.2f}, "
-                  f"MPIW Large: {val_metrics['mpiw_large']:.2f}")
+                  f"Ordering Violations: {val_metrics['ordering_violations']:.3f}, "
+                  f"Inner Ratio: {val_metrics['inner_ratio']:.3f}")
             
             # Early stopping
-            if self.patience_counter >= self.config.get('patience', 10):
+            if self.patience_counter >= self.config.get('patience', 20):
                 print(f"Early stopping triggered after {epoch+1} epochs")
                 break
+            
+            # Save checkpoint every 10 epochs
+            if (epoch + 1) % 10 == 0:
+                self._save_checkpoint(epoch, val_metrics)
         
         # Calculate total time
         total_time = time.time() - start_time
         
-        # Calculate final size-stratified metrics if we have a best model
-        best_metrics = {}
-        if self.best_coverage > 0:
-            # Load best model checkpoint to get detailed metrics
-            checkpoint_path = os.path.join(self.attempt_dir, 'checkpoints', 'best_model.pt')
-            if os.path.exists(checkpoint_path):
-                checkpoint = torch.load(checkpoint_path)
-                best_metrics = checkpoint.get('metrics', {})
+        # Calculate final metrics
+        baseline_mpiw = 48.5
+        mpiw_reduction = (baseline_mpiw - self.best_mpiw) / baseline_mpiw * 100 if self.best_mpiw < float('inf') else 0
         
         # Save final results
         final_results = {
@@ -326,14 +330,12 @@ class GAPTrainer:
             'config': self.config,
             'best_coverage': self.best_coverage,
             'best_mpiw': self.best_mpiw,
-            'best_mpiw_small': best_metrics.get('mpiw_small', 0),
-            'best_mpiw_medium': best_metrics.get('mpiw_medium', 0),
-            'best_mpiw_large': best_metrics.get('mpiw_large', 0),
-            'baseline_mpiw': 48.5,
-            'mpiw_reduction': (48.5 - self.best_mpiw) / 48.5 * 100 if self.best_mpiw < float('inf') else 0,
+            'baseline_mpiw': baseline_mpiw,
+            'mpiw_reduction': mpiw_reduction,
             'total_epochs': len(self.training_history),
             'total_time': total_time,
-            'training_history': self.training_history
+            'training_history': self.training_history,
+            'tau_history': self.tau_history
         }
         
         with open(os.path.join(self.attempt_dir, 'results.json'), 'w') as f:
@@ -352,25 +354,15 @@ class GAPTrainer:
         # Aggregate each metric
         aggregated = {}
         for key in keys:
-            if key.endswith('_loss') or key == 'total_loss':
-                # Average losses - convert to CPU if needed
-                values = []
-                for m in metrics_list:
-                    val = m[key]
-                    if isinstance(val, torch.Tensor):
-                        val = val.cpu().item()
-                    values.append(val)
-                aggregated[key] = np.mean(values)
-            else:
-                # Average other metrics - convert to CPU if needed
-                values = []
-                for m in metrics_list:
-                    val = m[key]
-                    if isinstance(val, torch.Tensor):
-                        val = val.cpu().item()
-                    if val > 0:
-                        values.append(val)
-                aggregated[key] = np.mean(values) if values else 0.0
+            values = []
+            for m in metrics_list:
+                val = m[key]
+                if isinstance(val, torch.Tensor):
+                    val = val.cpu().item()
+                values.append(val)
+            
+            # Average all metrics
+            aggregated[key] = np.mean(values)
         
         return aggregated
     
@@ -380,6 +372,7 @@ class GAPTrainer:
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
             'tau': self.model.get_tau(),
             'metrics': metrics,
             'config': self.config
@@ -395,82 +388,76 @@ class GAPTrainer:
 
 
 def run_autonomous_training():
-    """Autonomous training manager for GAP framework"""
+    """Autonomous training manager for OAGA framework"""
     # Load memory
-    memory_path = '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/unified_memory/framework_memories/framework_1_GAP_memory.json'
+    memory_path = '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/asymmetric_experiments/unified_memory/framework_memories/framework_2_OAGA_memory.json'
     with open(memory_path, 'r') as f:
         memory = json.load(f)
     
-    # Define configuration space with much lower efficiency weights
-    config_space = {
-        'hidden_dims': [[256, 128, 64], [128, 64], [512, 256, 128], [256, 128, 64, 32]],
-        'dropout': [0.0, 0.1, 0.2],
-        'activation': ['elu', 'relu', 'leakyrelu'],
-        'learning_rate': [1e-4, 5e-4, 1e-3],
-        'batch_size': [256, 512, 1024],
-        'lambda_efficiency': [0.01, 0.02, 0.05, 0.1],  # Much lower to prioritize coverage
-        'scheduler': ['cosine', 'step', None],
-        'epochs': [50],
-        'patience': [10],
-        'target_coverage': [0.90],
-        'min_tau': [0.5, 1.0],  # Higher minimum tau
-        'max_tau': [10.0, 20.0]  # Higher maximum tau
+    # Configuration for OAGA
+    base_config = {
+        'hidden_dims': [256, 128, 64],
+        'dropout': 0.1,
+        'activation': 'elu',
+        'learning_rate': 1e-4,
+        'batch_size': 256,
+        'lambda_coverage': 1.0,
+        'lambda_efficiency': 0.01,  # Very low initially
+        'lambda_ordering': 0.5,
+        'lambda_asymmetry': 0.1,
+        'symmetric_init': True,
+        'asymmetry_warmup_epochs': 10,
+        'scheduler': 'cosine_warm_restarts',
+        'epochs': 100,
+        'patience': 20,
+        'target_coverage': 0.90,
+        'initial_tau': 1.0,
+        'min_tau': 0.5,
+        'max_tau': 10.0
     }
     
-    # Start autonomous training loop
+    # Start training
     attempt = len(memory['attempts']) + 1
-    max_attempts = 10
+    max_attempts = 5  # Fewer attempts since OAGA is more stable
+    
+    # Check if we should increase lambda_efficiency for attempt 4
+    if attempt == 4:
+        # Last attempt was close, now push for more efficiency
+        base_config['lambda_efficiency'] = 0.008  # Double it
+        base_config['lambda_ordering'] = 0.3  # Reduce ordering constraint slightly
+        base_config['asymmetry_warmup_epochs'] = 5  # Allow asymmetry sooner
     
     while attempt <= max_attempts:
         print(f"\n{'='*80}")
-        print(f"GAP Framework - Attempt {attempt}/{max_attempts}")
+        print(f"OAGA Framework - Attempt {attempt}/{max_attempts}")
         print(f"{'='*80}\n")
         
-        # Select configuration based on previous attempts
-        if attempt == 1:
-            # Start with baseline configuration
-            config = {
-                'hidden_dims': [256, 128, 64],
-                'dropout': 0.1,
-                'activation': 'elu',
-                'learning_rate': 5e-4,
-                'batch_size': 512,
-                'lambda_efficiency': 0.25,
-                'scheduler': 'cosine',
-                'epochs': 50,
-                'patience': 10,
-                'target_coverage': 0.90,
-                'min_tau': 0.2,
-                'max_tau': 5.0
-            }
-        elif attempt <= 6:
-            # For attempts 2-6, use very low efficiency weight
-            config = {
-                'hidden_dims': [256, 128, 64],
-                'dropout': 0.1,
-                'activation': 'elu',
-                'learning_rate': 1e-3,
-                'batch_size': 512,
-                'lambda_efficiency': 0.01,  # Very low to fix coverage
-                'scheduler': 'cosine',
-                'epochs': 50,
-                'patience': 10,
-                'target_coverage': 0.90,
-                'min_tau': 1.0,
-                'max_tau': 20.0
-            }
-        else:
-            # Adapt configuration based on previous results
-            config = adapt_configuration(memory['attempts'], config_space)
+        # Modify config based on previous attempts
+        if attempt > 1:
+            # Adjust based on previous results
+            last_attempt = memory['attempts'][-1]
+            last_coverage = last_attempt['results']['coverage']
+            
+            if last_coverage < 0.5:
+                # Still too low coverage
+                base_config['lambda_efficiency'] *= 0.5
+                base_config['lambda_ordering'] *= 0.8
+                base_config['initial_tau'] *= 2.0
+            elif last_coverage < 0.88:
+                # Getting closer
+                base_config['lambda_efficiency'] *= 0.8
+            elif last_coverage > 0.92:
+                # Too high coverage
+                base_config['lambda_efficiency'] *= 1.5
         
         # Train model
-        trainer = GAPTrainer(config, attempt)
+        trainer = OAGATrainer(base_config, attempt)
         results = trainer.train()
         
         # Update memory
         memory['attempts'].append({
             'attempt_number': attempt,
-            'architecture': config,
+            'architecture': base_config,
             'results': {
                 'coverage': results['best_coverage'],
                 'mpiw': results['best_mpiw'],
@@ -483,7 +470,7 @@ def run_autonomous_training():
         memory['total_attempts'] = attempt
         
         # Check if target achieved
-        if results['best_coverage'] >= 0.88 and results['best_coverage'] <= 0.92 and results['mpiw_reduction'] >= 15:
+        if results['best_coverage'] >= 0.88 and results['best_coverage'] <= 0.92 and results['mpiw_reduction'] >= 20:
             memory['status'] = 'completed'
             memory['best_result'] = results
             memory['final_decision'] = f"Target achieved! Coverage: {results['best_coverage']:.3f}, MPIW reduction: {results['mpiw_reduction']:.1f}%"
@@ -506,56 +493,20 @@ def run_autonomous_training():
     return memory
 
 
-def adapt_configuration(attempts, config_space):
-    """Intelligently adapt configuration based on previous attempts"""
-    if not attempts:
-        return None
-    
-    last_attempt = attempts[-1]
-    last_results = last_attempt['results']
-    last_config = last_attempt['architecture']
-    
-    new_config = last_config.copy()
-    
-    # Analyze failure mode and adapt
-    if last_results['coverage'] < 0.88:
-        # Coverage too low
-        new_config['lambda_efficiency'] = max(0.15, last_config.get('lambda_efficiency', 0.25) - 0.05)
-        new_config['learning_rate'] = last_config.get('learning_rate', 5e-4) * 0.5
-    elif last_results['coverage'] > 0.92:
-        # Coverage too high
-        new_config['lambda_efficiency'] = min(0.4, last_config.get('lambda_efficiency', 0.25) + 0.05)
-    
-    if last_results['mpiw_reduction'] < 5:
-        # Not enough improvement
-        # Try different architecture
-        architecture_options = [[512, 256, 128], [256, 128, 64, 32], [128, 64]]
-        for arch in architecture_options:
-            if arch != last_config.get('hidden_dims'):
-                new_config['hidden_dims'] = arch
-                break
-    
-    # Try different hyperparameters
-    if len(attempts) % 3 == 0:
-        # Every 3rd attempt, try something different
-        new_config['activation'] = 'relu' if last_config.get('activation') == 'elu' else 'elu'
-        new_config['dropout'] = 0.2 if last_config.get('dropout', 0.1) < 0.2 else 0.0
-    
-    return new_config
-
-
 def analyze_results_and_decide(results):
     """Analyze results and make decision"""
     coverage = results['best_coverage']
     mpiw_reduction = results['mpiw_reduction']
     
-    if coverage < 0.88:
-        return f"Coverage too low ({coverage:.3f}), need to reduce efficiency weight"
+    if coverage < 0.5:
+        return f"Coverage critically low ({coverage:.3f}), need major adjustments"
+    elif coverage < 0.88:
+        return f"Coverage too low ({coverage:.3f}), reduce efficiency weight further"
     elif coverage > 0.92:
-        return f"Coverage too high ({coverage:.3f}), need to increase efficiency weight"
-    elif mpiw_reduction < 5:
-        return f"MPIW improvement insufficient ({mpiw_reduction:.1f}%), need larger model capacity"
-    elif mpiw_reduction < 15:
+        return f"Coverage too high ({coverage:.3f}), increase efficiency weight"
+    elif mpiw_reduction < 10:
+        return f"MPIW improvement insufficient ({mpiw_reduction:.1f}%), allow more asymmetry"
+    elif mpiw_reduction < 20:
         return f"Getting closer ({mpiw_reduction:.1f}% reduction), fine-tune hyperparameters"
     else:
         return f"Target achieved! Coverage: {coverage:.3f}, MPIW reduction: {mpiw_reduction:.1f}%"
@@ -568,7 +519,7 @@ if __name__ == "__main__":
     
     # Run autonomous training
     results = run_autonomous_training()
-    print(f"\nFinal GAP Framework Status: {results['status']}")
+    print(f"\nFinal OAGA Framework Status: {results['status']}")
     if results.get('best_result'):
         print(f"Best Coverage: {results['best_result']['best_coverage']:.3f}")
         print(f"Best MPIW Reduction: {results['best_result']['mpiw_reduction']:.1f}%")

@@ -1,0 +1,50 @@
+{
+  "framework_name": "HMAP",
+  "status": "failed",
+  "attempts": [
+    {
+      "attempt_number": 1,
+      "architecture": {
+        "model": {
+          "hypernet_hidden": [256, 512, 512],
+          "target_hidden": 32,
+          "dropout": 0.1
+        },
+        "training": {
+          "epochs": 100,
+          "batch_size": 256,
+          "learning_rate": 0.0001,
+          "weight_decay": 0.0001,
+          "target_coverage": 0.9,
+          "initial_tau": 3.0,
+          "tau_smoothing": 0.7,
+          "patience": 30
+        }
+      },
+      "results": {
+        "coverage": 0.2634,
+        "mpiw": 5.0,
+        "mpiw_reduction": 89.7
+      },
+      "issues": [
+        "Model collapsed to minimum width constraint",
+        "Coverage stuck at 26.34%",
+        "Hypernetwork generating constant outputs",
+        "RuntimeError: dtype mismatch in optimizer"
+      ],
+      "decision": "Model collapse similar to GAP/MAP/MoE-EW",
+      "total_time": 240.5
+    }
+  ],
+  "best_result": null,
+  "total_attempts": 1,
+  "time_spent": "4 minutes",
+  "start_time": "2025-01-27T01:40:00",
+  "final_decision": "Failed: Hypernetwork architecture too complex, model collapsed to minimum width predictions",
+  "lessons_learned": [
+    "Generating custom networks per input is too complex",
+    "Model exploits efficiency objective immediately",
+    "Even with symmetric initialization, collapse occurs",
+    "Hypernetworks add unnecessary complexity"
+  ]
+}

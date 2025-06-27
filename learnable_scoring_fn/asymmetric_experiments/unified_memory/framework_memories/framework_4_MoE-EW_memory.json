@@ -1,0 +1,66 @@
+{
+  "framework_name": "MoE-EW",
+  "status": "in_progress",
+  "attempts": [
+    {
+      "attempt_number": 1,
+      "architecture": {
+        "hidden_dims": [
+          256,
+          128,
+          64
+        ],
+        "num_experts": 3,
+        "dropout": 0.1,
+        "activation": "elu",
+        "learning_rate": 0.0001,
+        "batch_size": 256,
+        "lambda_coverage": 1.0,
+        "lambda_efficiency": 0.005,
+        "lambda_ordering": 0.2,
+        "lambda_evidence": 0.1,
+        "lambda_expert_diversity": 0.05,
+        "min_width": 0.5,
+        "symmetric_init": true,
+        "evidence_warmup_epochs": 5,
+        "scheduler": "one_cycle",
+        "warmup_steps": 1000,
+        "epochs": 100,
+        "patience": 20,
+        "target_coverage": 0.9,
+        "initial_tau": 1.0,
+        "min_tau": 0.5,
+        "max_tau": 10.0,
+        "tau_smoothing": 0.7
+      },
+      "results": {
+        "coverage": 0.0,
+        "mpiw": Infinity,
+        "mpiw_reduction": 0
+      },
+      "decision": "Coverage critically low (0.000), model likely collapsed",
+      "total_time": 863.5974524021149
+    }
+  ],
+  "best_result": null,
+  "total_attempts": 1,
+  "time_spent": "0h",
+  "start_time": "2025-01-26T14:00:00",
+  "final_decision": null,
+  "target_metrics": {
+    "coverage_range": [
+      0.88,
+      0.92
+    ],
+    "target_coverage": 0.9,
+    "min_mpiw_reduction": 0.2
+  },
+  "lessons_from_previous": [
+    "GAP failed due to model collapse to zero-width intervals",
+    "OAGA achieved target coverage but insufficient MPIW reduction (13.57%)",
+    "MAP failed despite mode specialization - collapsed to zero width",
+    "Need to balance coverage and efficiency more carefully",
+    "Consider uncertainty-based weighting to prevent collapse"
+  ],
+  "strategy": "Use mixture of experts with evidential uncertainty weighting to prevent collapse and improve reliability"
+}

@@ -1,12 +1,12 @@
 {
-  "current_framework": "OAGA",
-  "frameworks_completed": [],
-  "frameworks_failed": ["GAP"],
+  "current_framework": "MoE-EW",
+  "frameworks_completed": ["OAGA"],
+  "frameworks_failed": ["GAP", "MAP"],
   "overall_progress": {
-    "best_framework": null,
-    "best_mpiw_reduction": 0,
-    "total_experiments_run": 10,
-    "total_time_spent": 1024.8,
+    "best_framework": "OAGA",
+    "best_mpiw_reduction": 13.57,
+    "total_experiments_run": 17,
+    "total_time_spent": 3795.2,
     "start_time": "2025-01-26T10:30:00"
   },
   "baseline_reference": {
