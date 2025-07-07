@@ -113,7 +113,10 @@ class CacheGenerator:
         cfg = get_cfg()
         
         # Use the config for Faster R-CNN X-101-32x8d-FPN
-        config_path = "../detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
+        # Get the project root directory (parent of scripts/)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        config_path = os.path.join(project_root, "detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
         cfg.merge_from_file(config_path)
         
         # Set the checkpoint path
