@@ -348,7 +348,7 @@ class CacheGenerator:
             predictions: List of prediction dictionaries
             
         Returns:
-            features: [N, 17] tensor of extracted features
+            features: [N, 17] tensor of extracted features (13 geometric + 4 uncertainty)
         """
         print("Extracting features from predictions...")
         
@@ -368,24 +368,55 @@ class CacheGenerator:
             w = x2 - x1
             h = y2 - y1
             
-            # Extract 17 features (same as original training)
-            features[i, 0] = x1 / img_w                                    # normalized x1
-            features[i, 1] = y1 / img_h                                    # normalized y1
-            features[i, 2] = x2 / img_w                                    # normalized x2
-            features[i, 3] = y2 / img_h                                    # normalized y2
-            features[i, 4] = w / img_w                                     # normalized width
-            features[i, 5] = h / img_h                                     # normalized height
-            features[i, 6] = (w * h) / (img_w * img_h)                     # normalized area
-            features[i, 7] = w / (h + 1e-6)                                # aspect ratio
-            features[i, 8] = float(score)                                  # confidence score
-            features[i, 9] = (x1 + x2) / 2 / img_w                        # normalized center x
-            features[i, 10] = (y1 + y2) / 2 / img_h                       # normalized center y
-            features[i, 11] = abs((x1 + x2) / 2 - img_w / 2) / img_w      # distance from center x
-            features[i, 12] = abs((y1 + y2) / 2 - img_h / 2) / img_h      # distance from center y
-            features[i, 13] = x1 / img_w                                   # distance from left edge
-            features[i, 14] = y1 / img_h                                   # distance from top edge
-            features[i, 15] = (img_w - x2) / img_w                         # distance from right edge
-            features[i, 16] = (img_h - y2) / img_h                         # distance from bottom edge
+            # Extract 13 features matching feature_utils.py
+            # 1-4: Raw coordinates
+            features[i, 0] = x1                                            # x0
+            features[i, 1] = y1                                            # y0
+            features[i, 2] = x2                                            # x1
+            features[i, 3] = y2                                            # y1
+            
+            # 5: Confidence score
+            features[i, 4] = float(score)                                  # confidence
+            
+            # 6: Log area
+            area = w * h
+            features[i, 5] = np.log(max(area, 1e-6))                      # log_area
+            
+            # 7: Aspect ratio
+            features[i, 6] = w / (h + 1e-6)                                # aspect_ratio
+            
+            # 8-9: Normalized center coordinates
+            features[i, 7] = (x1 + x2) / 2 / img_w                        # center_x_norm
+            features[i, 8] = (y1 + y2) / 2 / img_h                        # center_y_norm
+            
+            # 10-11: Position relative to image center
+            features[i, 9] = ((x1 + x2) / 2 - img_w / 2) / img_w          # rel_pos_x
+            features[i, 10] = ((y1 + y2) / 2 - img_h / 2) / img_h         # rel_pos_y
+            
+            # 12: Relative size
+            features[i, 11] = area / (img_w * img_h)                       # rel_size
+            
+            # 13: Distance to nearest edge (minimum of all 4 edges)
+            dist_left = x1 / img_w
+            dist_right = (img_w - x2) / img_w
+            dist_top = y1 / img_h
+            dist_bottom = (img_h - y2) / img_h
+            features[i, 12] = min(dist_left, dist_right, dist_top, dist_bottom)  # edge_distance
+            
+            # 14-17: Uncertainty features (matching UncertaintyFeatureExtractor)
+            # 14: Confidence-based uncertainty
+            features[i, 13] = 1.0 - float(score)                           # uncertainty_score
+            
+            # 15: Ensemble uncertainty proxy (scaled confidence-based)
+            features[i, 14] = (1.0 - float(score)) * 10.0                  # scaled uncertainty
+            
+            # 16: Expected error proxy (scaled by typical error magnitude)
+            features[i, 15] = (1.0 - float(score)) * 50.0                  # expected_error
+            
+            # 17: Difficulty score (area difficulty + aspect ratio difficulty)
+            area_difficulty = 1.0 / (area + 1.0)
+            aspect_difficulty = abs(np.log(w / (h + 1e-6) + 1e-6))
+            features[i, 16] = (area_difficulty + aspect_difficulty) / 2.0  # difficulty_score
         
         print(f"Extracted features shape: {features.shape}")
         return features
