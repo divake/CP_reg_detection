@@ -249,3 +249,5 @@ errors.log
 
 learnable_scoring_fn/cache_*
 verify_claude_autoupdate_disabled.sh
+
+checkpoints/
