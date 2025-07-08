@@ -370,38 +370,38 @@ class CacheGenerator:
             
             # Extract 13 features matching feature_utils.py
             # 1-4: Raw coordinates
-            features[i, 0] = x1                                            # x0
-            features[i, 1] = y1                                            # y0
-            features[i, 2] = x2                                            # x1
-            features[i, 3] = y2                                            # y1
+            features[i, 0] = float(x1)                                     # x0
+            features[i, 1] = float(y1)                                     # y0
+            features[i, 2] = float(x2)                                     # x1
+            features[i, 3] = float(y2)                                     # y1
             
             # 5: Confidence score
             features[i, 4] = float(score)                                  # confidence
             
             # 6: Log area
-            area = w * h
-            features[i, 5] = np.log(max(area, 1e-6))                      # log_area
+            area = float(w * h)
+            features[i, 5] = float(np.log(max(area, 1e-6)))               # log_area
             
             # 7: Aspect ratio
-            features[i, 6] = w / (h + 1e-6)                                # aspect_ratio
+            features[i, 6] = float(w / (h + 1e-6))                         # aspect_ratio
             
             # 8-9: Normalized center coordinates
-            features[i, 7] = (x1 + x2) / 2 / img_w                        # center_x_norm
-            features[i, 8] = (y1 + y2) / 2 / img_h                        # center_y_norm
+            features[i, 7] = float((x1 + x2) / 2 / img_w)                 # center_x_norm
+            features[i, 8] = float((y1 + y2) / 2 / img_h)                 # center_y_norm
             
             # 10-11: Position relative to image center
-            features[i, 9] = ((x1 + x2) / 2 - img_w / 2) / img_w          # rel_pos_x
-            features[i, 10] = ((y1 + y2) / 2 - img_h / 2) / img_h         # rel_pos_y
+            features[i, 9] = float(((x1 + x2) / 2 - img_w / 2) / img_w)   # rel_pos_x
+            features[i, 10] = float(((y1 + y2) / 2 - img_h / 2) / img_h)  # rel_pos_y
             
             # 12: Relative size
-            features[i, 11] = area / (img_w * img_h)                       # rel_size
+            features[i, 11] = float(area / (img_w * img_h))                # rel_size
             
             # 13: Distance to nearest edge (minimum of all 4 edges)
-            dist_left = x1 / img_w
-            dist_right = (img_w - x2) / img_w
-            dist_top = y1 / img_h
-            dist_bottom = (img_h - y2) / img_h
-            features[i, 12] = min(dist_left, dist_right, dist_top, dist_bottom)  # edge_distance
+            dist_left = float(x1 / img_w)
+            dist_right = float((img_w - x2) / img_w)
+            dist_top = float(y1 / img_h)
+            dist_bottom = float((img_h - y2) / img_h)
+            features[i, 12] = float(min(dist_left, dist_right, dist_top, dist_bottom))  # edge_distance
             
             # 14-17: Uncertainty features (matching UncertaintyFeatureExtractor)
             # 14: Confidence-based uncertainty
@@ -414,9 +414,9 @@ class CacheGenerator:
             features[i, 15] = (1.0 - float(score)) * 50.0                  # expected_error
             
             # 17: Difficulty score (area difficulty + aspect ratio difficulty)
-            area_difficulty = 1.0 / (area + 1.0)
-            aspect_difficulty = abs(np.log(w / (h + 1e-6) + 1e-6))
-            features[i, 16] = (area_difficulty + aspect_difficulty) / 2.0  # difficulty_score
+            area_difficulty = float(1.0 / (area + 1.0))
+            aspect_difficulty = float(abs(np.log(float(w) / (float(h) + 1e-6) + 1e-6)))
+            features[i, 16] = float((area_difficulty + aspect_difficulty) / 2.0)  # difficulty_score
         
         print(f"Extracted features shape: {features.shape}")
         return features

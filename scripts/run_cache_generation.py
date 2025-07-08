@@ -96,8 +96,8 @@ def main():
         
         # For initial testing, limit to fewer images
         # Remove these limits for full cache generation
-        max_train_images = 1000  # Set to None for full dataset
-        max_val_images = 500     # Set to None for full dataset
+        max_train_images = None  # Set to None for full dataset
+        max_val_images = None     # Set to None for full dataset
         
         print(f"\nGenerating cache with limits:")
         print(f"  Max train images: {max_train_images}")
