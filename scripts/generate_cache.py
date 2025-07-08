@@ -68,35 +68,37 @@ class CacheGenerator:
     """Generate cache from Faster R-CNN checkpoint for learnable scoring function."""
     
     def __init__(self, checkpoint_path: str, coco_data_dir: str, output_dir: str, 
-                 device: str = "auto", confidence_threshold: float = 0.5):
+                 device: str = "auto", confidence_threshold: float = 0.1,
+                 iou_threshold: float = 0.3, config_path: str = None):
         """
         Initialize cache generator.
         
         Args:
-            checkpoint_path: Path to Faster R-CNN checkpoint
+            checkpoint_path: Path to model checkpoint
             coco_data_dir: Path to COCO dataset directory
-            output_dir: Output directory for cache files
-            device: Device to use ('auto', 'cpu', 'cuda')
+            output_dir: Directory to save cache files
+            device: Device to use ("auto", "cuda", "cpu")
             confidence_threshold: Minimum confidence threshold for predictions
+            iou_threshold: IoU threshold for matching predictions to ground truth
+            config_path: Path to model config file (if None, auto-determined from checkpoint)
         """
         self.checkpoint_path = checkpoint_path
         self.coco_data_dir = Path(coco_data_dir)
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.confidence_threshold = confidence_threshold
+        self.iou_threshold = iou_threshold
+        self.config_path = config_path
         
-        # Device setup
+        # Auto-detect device
         if device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
         
-        self.confidence_threshold = confidence_threshold
-        
-        # Initialize feature extractor
-        self.feature_extractor = FeatureExtractor(img_height=480, img_width=640)
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize model
-        self.model = None
         self.predictor = None
         
         print(f"Using device: {self.device}")
@@ -104,19 +106,26 @@ class CacheGenerator:
         print(f"COCO data directory: {coco_data_dir}")
         print(f"Output directory: {output_dir}")
         print(f"Confidence threshold: {confidence_threshold}")
+        print(f"IoU matching threshold: {iou_threshold}")
+        if config_path:
+            print(f"Config path: {config_path}")
+        print()
     
     def setup_model(self):
-        """Setup the Faster R-CNN model from checkpoint."""
-        print("Setting up Faster R-CNN model...")
+        """Setup the model from checkpoint."""
+        print("Setting up model...")
         
         # Create config
         cfg = get_cfg()
         
-        # Use the config for Faster R-CNN X-101-32x8d-FPN
-        # Get the project root directory (parent of scripts/)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)
-        config_path = os.path.join(project_root, "detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
+        # Determine config path
+        if self.config_path:
+            config_path = self.config_path
+        else:
+            # Auto-determine config based on checkpoint name
+            config_path = self._auto_determine_config_path()
+        
+        print(f"Using config: {config_path}")
         cfg.merge_from_file(config_path)
         
         # Set the checkpoint path
@@ -134,6 +143,33 @@ class CacheGenerator:
         
         print("Model setup completed")
         print(f"Model device: {next(self.model.parameters()).device}")
+
+    def _auto_determine_config_path(self):
+        """Auto-determine config path based on checkpoint filename."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        
+        checkpoint_name = os.path.basename(self.checkpoint_path).lower()
+        
+        # Map common checkpoint names to config files
+        config_mapping = {
+            'faster_rcnn_r_50_fpn': 'faster_rcnn_R_50_FPN_3x.yaml',
+            'faster_rcnn_r_101_fpn': 'faster_rcnn_R_101_FPN_3x.yaml',
+            'faster_rcnn_x_101_32x8d_fpn': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml',
+            'mask_rcnn_r_50_fpn': 'mask_rcnn_R_50_FPN_3x.yaml',
+            'mask_rcnn_r_101_fpn': 'mask_rcnn_R_101_FPN_3x.yaml',
+            'retinanet_r_50_fpn': 'retinanet_R_50_FPN_3x.yaml',
+            'retinanet_r_101_fpn': 'retinanet_R_101_FPN_3x.yaml',
+        }
+        
+        # Find matching config
+        for key, config_file in config_mapping.items():
+            if key in checkpoint_name:
+                return os.path.join(project_root, "detectron2/configs/COCO-Detection", config_file)
+        
+        # Default fallback
+        print(f"Warning: Could not auto-determine config for {checkpoint_name}, using R-50 FPN default")
+        return os.path.join(project_root, "detectron2/configs/COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     
     def register_coco_datasets(self):
         """Register COCO datasets with detectron2."""
@@ -291,8 +327,6 @@ class CacheGenerator:
         matched_predictions = []
         matched_labels = []
         
-        iou_threshold = 0.5
-        
         for pred_dict, label_dict in zip(predictions, labels):
             if pred_dict['img_id'] != label_dict['img_id']:
                 continue
@@ -315,7 +349,7 @@ class CacheGenerator:
                         best_gt_idx = j
                 
                 # If IoU is above threshold, create matched pair
-                if best_iou > iou_threshold:
+                if best_iou > self.iou_threshold:
                     matched_pred = {
                         'pred_coords': pred_box,
                         'pred_cls': pred_dict['pred_cls'][i],
@@ -337,7 +371,13 @@ class CacheGenerator:
                     matched_predictions.append(matched_pred)
                     matched_labels.append(matched_label)
         
+        total_predictions = sum(len(pred['pred_coords']) for pred in predictions)
+        total_gt_boxes = sum(len(label['gt_coords']) for label in labels)
+        
+        print(f"Total predictions across all images: {total_predictions}")
+        print(f"Total ground truth boxes: {total_gt_boxes}")
         print(f"Created {len(matched_predictions)} matched prediction-label pairs")
+        print(f"Matching rate: {len(matched_predictions)/total_predictions*100:.1f}% of predictions matched")
         return matched_predictions, matched_labels
     
     def extract_features(self, predictions: List[Dict]) -> torch.Tensor:
@@ -686,7 +726,7 @@ def main():
     parser.add_argument("--device", type=str, default="auto",
                         help="Device to use (auto, cpu, cuda)")
     parser.add_argument("--confidence-threshold", type=float, default=0.5,
-                        help="Minimum confidence threshold for predictions (default: 0.5 for quality filtering)")
+                        help="Minimum confidence threshold for predictions (default: 0.5 for optimal performance)")
     parser.add_argument("--max-train-images", type=int, default=None,
                         help="Maximum training images to process (for testing)")
     parser.add_argument("--max-val-images", type=int, default=None,
