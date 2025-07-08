@@ -85,19 +85,19 @@ def main():
     try:
         from generate_cache import CacheGenerator
         
-        # Create cache generator
+        # Create cache generator with higher confidence threshold for quality filtering
         generator = CacheGenerator(
             checkpoint_path=checkpoint_path,
             coco_data_dir=coco_dir,
             output_dir=output_dir,
             device="auto",
-            confidence_threshold=0.05
+            confidence_threshold=0.5  # Higher threshold for better quality predictions
         )
         
         # For initial testing, limit to fewer images
         # Remove these limits for full cache generation
-        max_train_images = None  # Set to None for full dataset
-        max_val_images = None     # Set to None for full dataset
+        max_train_images = 5000  # Set to None for full dataset
+        max_val_images = 1000     # Set to None for full dataset
         
         print(f"\nGenerating cache with limits:")
         print(f"  Max train images: {max_train_images}")
