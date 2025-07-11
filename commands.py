@@ -34,12 +34,12 @@ def main():
                 for cfg in risk_control[rc]:
                     s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --run_collect_pred --save_file_pred --risk_control={rc} --alpha=0.1 --label_set=class_threshold --label_alpha=0.01 --run_risk_control --save_file_control --save_label_set --run_eval --save_file_eval --file_name_suffix=_{cfg}_class --device=cuda"
                     f.write(s + "\n")
-                    s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=oracle --label_alpha=0.01 --run_risk_control --save_file_control --save_label_set --run_eval --save_file_eval --file_name_suffix=_{cfg}_oracle --device=cuda"
-                    f.write(s + "\n")
-                    s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=top_singleton --label_alpha=0.01 --run_risk_control --save_file_control --run_eval --save_file_eval --file_name_suffix=_{cfg}_top --device=cuda"
-                    f.write(s + "\n")
-                    s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=full --label_alpha=0.01 --run_risk_control --save_file_control --run_eval --save_file_eval --file_name_suffix=_{cfg}_full --device=cuda"
-                    f.write(s + "\n")
+                    # s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=oracle --label_alpha=0.01 --run_risk_control --save_file_control --save_label_set --run_eval --save_file_eval --file_name_suffix=_{cfg}_oracle --device=cuda"
+                    # f.write(s + "\n")
+                    # s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=top_singleton --label_alpha=0.01 --run_risk_control --save_file_control --run_eval --save_file_eval --file_name_suffix=_{cfg}_top --device=cuda"
+                    # f.write(s + "\n")
+                    # s = f"/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_{cfg} --config_path=config/{d} --load_collect_pred={rc}_{model_id}_{cfg}_class --risk_control={rc} --alpha=0.1 --label_set=full --label_alpha=0.01 --run_risk_control --save_file_control --run_eval --save_file_eval --file_name_suffix=_{cfg}_full --device=cuda"
+                    # f.write(s + "\n")
 
 
 if __name__ == "__main__":

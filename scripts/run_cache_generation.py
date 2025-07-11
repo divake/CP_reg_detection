@@ -34,7 +34,7 @@ def main():
     # Mask R-CNN: "/path/to/mask_rcnn_R_50_FPN_3x.pkl"
     
     # Output Configuration  
-    output_dir = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model"
+    output_dir = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50"
     
     # Dataset Limits (set to None for full dataset)
     max_train_images = None  # Set to None for full COCO train set (118k images)
