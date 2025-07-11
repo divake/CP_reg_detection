@@ -8,19 +8,62 @@ This script creates two specific plots:
 1. Coverage violin plots comparing 3 methods
 2. Coverage-Adjusted MPIW violin plots for fair comparison at 90% coverage
 
-Base Model: ResNeXt-101-FPN (x101fpn)
 Dataset: COCO validation set
-Methods: Standard, Ensemble, CQR (Learnable method removed)
+Methods: Standard, Ensemble, CQR
 
-Input Files Required:
-- std_conf_x101fpn_std_rank_class_box_set.pt
-- ens_conf_x101fpn_ens_rank_class_box_set.pt  
-- cqr_conf_x101fpn_cqr_rank_class_box_set.pt
+Features:
+- Easy base model switching via configuration
+- Coverage adjustment for fair MPIW comparison
+- Clean 3-method comparison (learnable method removed)
 
 Output Files:
 - coco_val_coverage_violin.png
 - coco_val_mpiw_adjusted_violin.png (MPIW adjusted to 90% coverage)
 """
+
+# ============================================================================
+# CONFIGURATION - EASY BASE MODEL SWITCHING
+# ============================================================================
+
+# Base model configuration - Change these to switch between models
+BASE_MODEL_CONFIG = {
+    # Current setup: R50-FPN for STD & ENS, X101-FPN for CQR
+    'std': {
+        'model_id': 'r50fpn',
+        'model_name': 'ResNet-50-FPN',
+        'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'
+    },
+    'ens': {
+        'model_id': 'r50fpn', 
+        'model_name': 'ResNet-50-FPN',
+        'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'
+    },
+    'cqr': {
+        'model_id': 'x101fpn',
+        'model_name': 'ResNeXt-101-FPN', 
+        'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'
+    }
+}
+
+# Alternative configurations for easy switching:
+# 
+# ALL R50-FPN:
+# BASE_MODEL_CONFIG = {
+#     'std': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'},
+#     'ens': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'},
+#     'cqr': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'}
+# }
+#
+# ALL X101-FPN:
+# BASE_MODEL_CONFIG = {
+#     'std': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'},
+#     'ens': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'},
+#     'cqr': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'}
+# }
+
+# ============================================================================
+# IMPORTS
+# ============================================================================
 
 import os
 import sys
@@ -42,6 +85,24 @@ matplotlib.rcParams.update({
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, FixedFormatter
 
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def get_base_model_summary():
+    """Get a summary of current base model configuration"""
+    summary = []
+    for method, config in BASE_MODEL_CONFIG.items():
+        summary.append(f"{method.upper()}: {config['model_name']} ({config['model_id']})")
+    return ", ".join(summary)
+
+def get_unified_model_name():
+    """Get unified model name if all methods use the same model, otherwise return mixed"""
+    model_names = set(config['model_name'] for config in BASE_MODEL_CONFIG.values())
+    if len(model_names) == 1:
+        return list(model_names)[0]
+    else:
+        return "Mixed Models"
 
 def configure_matplotlib_no_latex():
     """Ensure matplotlib is configured to not use LaTeX"""
@@ -60,12 +121,10 @@ def configure_matplotlib_no_latex():
         'figure.max_open_warning': 0
     })
 
-
 def save_fig(figname: str, **kwargs):
     """Save figure to file with given name"""
     plt.savefig(figname + ".png", format="png", dpi=300, bbox_inches='tight', **kwargs)
     plt.close()  # Close the figure to free memory
-
 
 def adjust_mpiw_to_target_coverage(coverage_data, mpiw_data, target_coverage=0.9):
     """
@@ -96,6 +155,9 @@ def adjust_mpiw_to_target_coverage(coverage_data, mpiw_data, target_coverage=0.9
     
     return adjusted_mpiw
 
+# ============================================================================
+# DATA LOADING
+# ============================================================================
 
 def load_performance_data():
     """
@@ -103,42 +165,44 @@ def load_performance_data():
     
     Returns:
         dict: Dictionary containing coverage and MPIW data for each method
+        
+    Raises:
+        FileNotFoundError: If any required result files are missing
+        Exception: If any files cannot be loaded properly
     """
     print("Loading performance data from conformal prediction results...")
     print("Note: Learnable method removed - comparing only 3 methods")
+    print(f"Base Model Configuration: {get_base_model_summary()}")
     
-    # Define base directories - ONLY 3 METHODS NOW
-    base_dirs = {
-        'std': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_std_rank_class',
-        'ens': '/ssd_4TB/divake/conformal-od/output/coco_val/ens_conf_x101fpn_ens_rank_class', 
-        'cqr': '/ssd_4TB/divake/conformal-od/output/coco_val/cqr_conf_x101fpn_cqr_rank_class'
-    }
+    # Generate dynamic base directories based on configuration
+    base_dirs = {}
+    data_files = {}
     
-    # Define exact file names - ONLY 3 METHODS NOW
-    data_files = {
-        'std': 'std_conf_x101fpn_std_rank_class_box_set.pt',
-        'ens': 'ens_conf_x101fpn_ens_rank_class_box_set.pt',
-        'cqr': 'cqr_conf_x101fpn_cqr_rank_class_box_set.pt'
-    }
+    for method in ['std', 'ens', 'cqr']:
+        model_id = BASE_MODEL_CONFIG[method]['model_id']
+        method_suffix = f"{method}_rank_class"
+        
+        base_dirs[method] = f'/ssd_4TB/divake/conformal-od/output/coco_val/{method}_conf_{model_id}_{method_suffix}'
+        data_files[method] = f'{method}_conf_{model_id}_{method_suffix}_box_set.pt'
     
-    # Method names and descriptions - ONLY 3 METHODS NOW
+    # Method names and descriptions - Dynamic based on configuration
     method_info = {
         'std': {
             'name': 'Box-Std',
             'full_name': 'Standard Conformal (Absolute Residual)',
-            'base_model': 'ResNeXt-101-FPN',
+            'base_model': BASE_MODEL_CONFIG['std']['model_name'],
             'scoring': 'Absolute residual between predicted and ground truth boxes'
         },
         'ens': {
             'name': 'Box-Ens', 
             'full_name': 'Ensemble Conformal (Normalized Residual)',
-            'base_model': 'ResNeXt-101-FPN Ensemble (5 models)',
+            'base_model': f"{BASE_MODEL_CONFIG['ens']['model_name']} Ensemble (5 models)",
             'scoring': 'Normalized residual with ensemble uncertainty'
         },
         'cqr': {
             'name': 'Box-CQR',
             'full_name': 'Conformalized Quantile Regression', 
-            'base_model': 'ResNeXt-101-FPN with Quantile Regression Head',
+            'base_model': f"{BASE_MODEL_CONFIG['cqr']['model_name']} with Quantile Regression Head",
             'scoring': 'Quantile regression predictions (10th, 90th percentiles)'
         }
     }
@@ -153,78 +217,112 @@ def load_performance_data():
         'cov_area_l': 8  # Coverage for large objects
     }
     
+    # First, check if all required files exist
+    missing_files = []
+    file_paths = {}
+    
+    for method in ['std', 'ens', 'cqr']:
+        file_path = os.path.join(base_dirs[method], data_files[method])
+        file_paths[method] = file_path
+        
+        if not os.path.exists(file_path):
+            missing_files.append(f"  - {method.upper()}: {file_path}")
+    
+    # If any files are missing, show error and exit
+    if missing_files:
+        print("\n" + "="*80)
+        print("❌ ERROR: REQUIRED RESULT FILES ARE MISSING!")
+        print("="*80)
+        print("The following result files are required but not found:")
+        print()
+        for missing in missing_files:
+            print(missing)
+        print()
+        print("🔧 TO FIX THIS:")
+        print("1. Run the conformal prediction experiments first using:")
+        print("   /ssd_4TB/divake/conformal-od/run.sh")
+        print("2. Or run the individual commands from:")
+        print("   /ssd_4TB/divake/conformal-od/commands.txt")
+        print()
+        print("📋 COMMANDS TO GENERATE MISSING FILES:")
+        
+        cmd_templates = {
+            'std': "/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_std_rank --config_path=config/coco_val --run_collect_pred --save_file_pred --risk_control=std_conf --alpha=0.1 --run_risk_control --save_file_control --run_eval --save_file_eval --device=cuda",
+            'ens': "/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_ens_rank --config_path=config/coco_val --run_collect_pred --save_file_pred --risk_control=ens_conf --alpha=0.1 --run_risk_control --save_file_control --run_eval --save_file_eval --device=cuda",
+            'cqr': "/home/divake/miniconda3/envs/env_cu121/bin/python main.py --config_file=cfg_cqr_rank --config_path=config/coco_val --run_collect_pred --save_file_pred --risk_control=cqr_conf --alpha=0.1 --run_risk_control --save_file_control --run_eval --save_file_eval --device=cuda"
+        }
+        
+        for method in ['std', 'ens', 'cqr']:
+            if any(method.upper() in missing for missing in missing_files):
+                print(f"\n{method.upper()}:")
+                print(f"  {cmd_templates[method]}")
+        
+        print("\n" + "="*80)
+        raise FileNotFoundError(f"Missing {len(missing_files)} required result file(s). Please run the experiments first.")
+    
+    # All files exist, proceed with loading
     performance_data = {}
     
-    for method in ['std', 'ens', 'cqr']:  # ONLY 3 METHODS NOW
-        data_file_path = os.path.join(base_dirs[method], data_files[method])
+    for method in ['std', 'ens', 'cqr']:
+        data_file_path = file_paths[method]
         
         print(f"\n=== {method_info[method]['name']} ({method_info[method]['full_name']}) ===")
         print(f"Base Model: {method_info[method]['base_model']}")
         print(f"Scoring Strategy: {method_info[method]['scoring']}")
         print(f"Loading from: {data_file_path}")
         
-        if os.path.exists(data_file_path):
-            try:
-                # Load tensor data
-                # Shape: [n_trials, n_classes, n_score_indices, n_metrics]
-                control_data = torch.load(data_file_path, map_location='cpu', weights_only=False)
-                
-                print(f"Data shape: {control_data.shape}")
-                print(f"  - {control_data.shape[0]} calibration trials")
-                print(f"  - {control_data.shape[1]} object classes")
-                print(f"  - {control_data.shape[2]} score indices")
-                print(f"  - {control_data.shape[3]} metrics")
-                
-                # Extract metrics
-                # Average over classes and score indices for each trial
-                coverage_all = control_data[:, :, :, metric_indices['cov_box']].mean(dim=(1,2))
-                mpiw_all = control_data[:, :, 0, metric_indices['mpiw']].mean(dim=1)  # Use first score index only
-                
-                # Convert to numpy
-                coverage_data = coverage_all.cpu().numpy()
-                mpiw_data = mpiw_all.cpu().numpy()
-                
-                # Calculate coverage-adjusted MPIW for fair comparison
-                mpiw_adjusted = adjust_mpiw_to_target_coverage(coverage_data, mpiw_data, target_coverage=0.9)
-                
-                performance_data[method] = {
-                    'coverage': coverage_data,
-                    'mpiw': mpiw_data,
-                    'mpiw_adjusted': mpiw_adjusted,
-                    'info': method_info[method]
-                }
-                
-                print(f"✓ Coverage: {coverage_data.mean():.3f} ± {coverage_data.std():.3f}")
-                print(f"✓ MPIW (original): {mpiw_data.mean():.1f} ± {mpiw_data.std():.1f}")
-                print(f"✓ MPIW (adjusted to 90%): {mpiw_adjusted.mean():.1f} ± {mpiw_adjusted.std():.1f}")
-                
-            except Exception as e:
-                print(f"✗ Error loading {method}: {e}")
-                # Create dummy data as fallback
-                coverage_dummy = np.random.uniform(0.88, 0.95, 100)
-                mpiw_dummy = np.random.uniform(80, 120, 100)
-                performance_data[method] = {
-                    'coverage': coverage_dummy,
-                    'mpiw': mpiw_dummy,
-                    'mpiw_adjusted': adjust_mpiw_to_target_coverage(coverage_dummy, mpiw_dummy),
-                    'info': method_info[method]
-                }
-                print(f"✗ Using dummy data for {method}")
-        else:
-            print(f"✗ File not found: {data_file_path}")
-            # Create dummy data as fallback
-            coverage_dummy = np.random.uniform(0.88, 0.95, 100)
-            mpiw_dummy = np.random.uniform(80, 120, 100)
+        try:
+            # Load tensor data
+            # Shape: [n_trials, n_classes, n_score_indices, n_metrics]
+            control_data = torch.load(data_file_path, map_location='cpu', weights_only=False)
+            
+            print(f"Data shape: {control_data.shape}")
+            print(f"  - {control_data.shape[0]} calibration trials")
+            print(f"  - {control_data.shape[1]} object classes")
+            print(f"  - {control_data.shape[2]} score indices")
+            print(f"  - {control_data.shape[3]} metrics")
+            
+            # Extract metrics
+            # Average over classes and score indices for each trial
+            coverage_all = control_data[:, :, :, metric_indices['cov_box']].mean(dim=(1,2))
+            mpiw_all = control_data[:, :, 0, metric_indices['mpiw']].mean(dim=1)  # Use first score index only
+            
+            # Convert to numpy
+            coverage_data = coverage_all.cpu().numpy()
+            mpiw_data = mpiw_all.cpu().numpy()
+            
+            # Calculate coverage-adjusted MPIW for fair comparison
+            mpiw_adjusted = adjust_mpiw_to_target_coverage(coverage_data, mpiw_data, target_coverage=0.9)
+            
             performance_data[method] = {
-                'coverage': coverage_dummy,
-                'mpiw': mpiw_dummy,
-                'mpiw_adjusted': adjust_mpiw_to_target_coverage(coverage_dummy, mpiw_dummy),
+                'coverage': coverage_data,
+                'mpiw': mpiw_data,
+                'mpiw_adjusted': mpiw_adjusted,
                 'info': method_info[method]
             }
-            print(f"✗ Using dummy data for {method}")
+            
+            print(f"✓ Coverage: {coverage_data.mean():.3f} ± {coverage_data.std():.3f}")
+            print(f"✓ MPIW (original): {mpiw_data.mean():.1f} ± {mpiw_data.std():.1f}")
+            print(f"✓ MPIW (adjusted to 90%): {mpiw_adjusted.mean():.1f} ± {mpiw_adjusted.std():.1f}")
+            
+        except Exception as e:
+            print(f"\n❌ ERROR: Failed to load {method.upper()} data from {data_file_path}")
+            print(f"Error details: {e}")
+            print(f"File exists: {os.path.exists(data_file_path)}")
+            if os.path.exists(data_file_path):
+                print(f"File size: {os.path.getsize(data_file_path)} bytes")
+            print("\n🔧 TROUBLESHOOTING:")
+            print("1. Check if the file was generated correctly")
+            print("2. Verify the file is not corrupted")
+            print("3. Re-run the conformal prediction experiment for this method")
+            print("4. Check file permissions")
+            raise Exception(f"Failed to load {method.upper()} result file: {e}")
     
     return performance_data
 
+# ============================================================================
+# PLOTTING FUNCTIONS
+# ============================================================================
 
 def plot_coverage_violin(performance_data, output_dir):
     """
@@ -240,7 +338,7 @@ def plot_coverage_violin(performance_data, output_dir):
     
     configure_matplotlib_no_latex()
     
-    # Method order and colors - ONLY 3 METHODS NOW
+    # Method order and colors
     methods = ['std', 'ens', 'cqr']
     colors = ["#E63946", "#219EBC", "#023047"]
     method_labels = [performance_data[m]['info']['name'] for m in methods]
@@ -296,9 +394,10 @@ def plot_coverage_violin(performance_data, output_dir):
     # Add legend
     ax.legend(loc='upper right', fontsize=11)
     
-    # Add title
-    ax.set_title("Coverage Comparison - COCO Validation Set\n"
-                "Base Model: ResNeXt-101-FPN (3 Methods)", fontsize=14, pad=20)
+    # Add title with dynamic base model information
+    unified_model = get_unified_model_name()
+    ax.set_title(f"Coverage Comparison - COCO Validation Set\n"
+                f"Base Model: {unified_model} (3 Methods)", fontsize=14, pad=20)
     
     plt.tight_layout()
     
@@ -315,7 +414,6 @@ def plot_coverage_violin(performance_data, output_dir):
         print(f"{method_labels[i]:>10}: {data.mean():.3f} ± {data.std():.3f} "
               f"(min: {data.min():.3f}, max: {data.max():.3f})")
 
-
 def plot_mpiw_violin(performance_data, output_dir):
     """
     Create MPIW violin plot comparing 3 methods with coverage adjustment.
@@ -331,7 +429,7 @@ def plot_mpiw_violin(performance_data, output_dir):
     
     configure_matplotlib_no_latex()
     
-    # Method order and colors - ONLY 3 METHODS NOW
+    # Method order and colors
     methods = ['std', 'ens', 'cqr']
     colors = ["#E63946", "#219EBC", "#023047"]
     method_labels = [performance_data[m]['info']['name'] for m in methods]
@@ -391,9 +489,10 @@ def plot_mpiw_violin(performance_data, output_dir):
     ax2.set_xticklabels(method_labels, fontsize=10)
     ax2.tick_params(axis="y", which="major", labelsize=11)
     
-    # Overall title
-    fig.suptitle("MPIW Comparison - COCO Validation Set\n"
-                "Base Model: ResNeXt-101-FPN (Lower is Better)", fontsize=14)
+    # Overall title with dynamic base model information
+    unified_model = get_unified_model_name()
+    fig.suptitle(f"MPIW Comparison - COCO Validation Set\n"
+                f"Base Model: {unified_model} (Lower is Better)", fontsize=14)
     
     plt.tight_layout()
     
@@ -415,6 +514,9 @@ def plot_mpiw_violin(performance_data, output_dir):
               f"→ {adj_data.mean():>7.1f} ± {adj_data.std():>4.1f} "
               f"(cov: {cov_data.mean():.3f})")
 
+# ============================================================================
+# MAIN FUNCTION
+# ============================================================================
 
 def main():
     """Main function to generate both performance plots"""
@@ -425,10 +527,12 @@ def main():
     print("for 3 conformal prediction methods on COCO validation set.")
     print("(Learnable method removed for cleaner comparison)")
     print()
-    print("Base Model: ResNeXt-101-FPN (x101fpn)")
+    print(f"Base Model Configuration: {get_base_model_summary()}")
     print("Dataset: COCO validation set")
     print("Methods: Standard, Ensemble, CQR")
     print("Coverage Adjustment: MPIW scaled to 90% coverage for fair comparison")
+    print()
+    print("💡 To switch base models, edit the BASE_MODEL_CONFIG at the top of this script")
     print("="*80)
     
     # Create output directory
@@ -450,12 +554,15 @@ def main():
     print(f"  - {output_dir}/coco_val_coverage_violin.png")
     print(f"  - {output_dir}/coco_val_mpiw_adjusted_violin.png")
     print()
-    print("Key improvements:")
-    print("  ✓ Removed learnable method (3 methods only)")
-    print("  ✓ Added coverage adjustment for fair MPIW comparison")
+    print("Key features:")
+    print("  ✓ Easy base model switching via BASE_MODEL_CONFIG")
+    print("  ✓ Dynamic file paths based on selected models")
+    print("  ✓ Coverage adjustment for fair MPIW comparison")
+    print("  ✓ Mixed model support (different models per method)")
     print("  ✓ All MPIW values normalized to 90% coverage level")
+    print()
+    print(f"Current configuration: {get_base_model_summary()}")
     print("="*80)
-
 
 if __name__ == "__main__":
     main() 

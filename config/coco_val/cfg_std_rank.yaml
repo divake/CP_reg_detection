@@ -68,11 +68,11 @@ MODEL:
       IMS_PER_BATCH: 16
       MAX_ITER: 5000
   DEVICE: cuda
-  FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml
-  ID: x101fpn
+  FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml
+  ID: r50fpn
   IOU_THRESH_TEST: 0.5
   LOCAL_CHECKPOINT: false
-  NAME: Faster R-CNN X101-FPN
+  NAME: Faster R-CNN R50-FPN
 PROJECT:
   CHECKPOINT_DIR: checkpoints
   CODE_DIR: conformalbb

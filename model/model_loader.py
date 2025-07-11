@@ -59,8 +59,8 @@ def d2_build_model(cfg: dict, logger):
         cfg_my_model
     )
     
-    # Change the device to cuda:1 instead of the default cuda:0
-    cfg_model.MODEL.DEVICE = "cuda:1"
+    # Use the device setting from the main configuration (respects command line argument)
+    cfg_model.MODEL.DEVICE = cfg.MODEL.DEVICE
     logger.info(f"Set model device to '{cfg_model.MODEL.DEVICE}'.")
 
     model = build_model(cfg_model)  # Builds structure with random params

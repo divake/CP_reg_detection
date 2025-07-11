@@ -169,7 +169,7 @@ def create_parser():
         type=str,
         default="cpu",
         required=False,
-        help="Device to run code on (cpu, cuda).",
+        help="Device to run code on. Options: 'cpu', 'cuda' (default GPU), 'cuda:0' (GPU 0), 'cuda:1' (GPU 1), etc. Use specific GPU indices to run on different GPUs.",
     )
     parser.add_argument(
         "--learnable_model_path",
@@ -203,6 +203,38 @@ def create_parser():
     return parser
 
 
+def validate_device_string(device_str):
+    """
+    Validate device string format and provide helpful error messages.
+    
+    Args:
+        device_str (str): Device string to validate
+        
+    Returns:
+        str: Validated device string
+        
+    Raises:
+        ValueError: If device string format is invalid
+    """
+    device_str = device_str.lower().strip()
+    
+    # Valid formats
+    if device_str == "cpu":
+        return device_str
+    elif device_str == "cuda":
+        return device_str
+    elif device_str.startswith("cuda:"):
+        try:
+            # Extract GPU index and validate it's a number
+            gpu_index = device_str.split(":")[1]
+            int(gpu_index)  # This will raise ValueError if not a valid integer
+            return device_str
+        except (IndexError, ValueError):
+            raise ValueError(f"Invalid device format: '{device_str}'. Use format 'cuda:N' where N is a GPU index (e.g., 'cuda:0', 'cuda:1').")
+    else:
+        raise ValueError(f"Invalid device: '{device_str}'. Valid options are 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.")
+
+
 def main():
     """
     This function is the main function to run the model and experiment.
@@ -223,6 +255,18 @@ def main():
     """
     parser = create_parser()
     args = parser.parse_args()
+    
+    # Validate device string format
+    try:
+        args.device = validate_device_string(args.device)
+    except ValueError as e:
+        print(f"❌ Error: {e}")
+        print(f"💡 Examples of valid device specifications:")
+        print(f"   --device=cpu         # Use CPU")
+        print(f"   --device=cuda        # Use default GPU")
+        print(f"   --device=cuda:0      # Use GPU 0")
+        print(f"   --device=cuda:1      # Use GPU 1")
+        sys.exit(1)
 
     # Load config
     cfg = io_file.load_yaml(args.config_file, args.config_path, to_yacs=True)
