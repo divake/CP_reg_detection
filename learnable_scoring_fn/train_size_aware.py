@@ -55,7 +55,7 @@ def main():
     
     # Paths
     cache_dir = config.get('cache_dir', 
-                           "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50")
+                           "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_yolov3")
     output_dir = config.get('output_dir',
                            "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric")
     
