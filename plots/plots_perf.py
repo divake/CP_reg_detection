@@ -27,11 +27,11 @@ Output Files:
 
 # Base model configuration - Change these to switch between models
 BASE_MODEL_CONFIG = {
-    # Current setup: R50-FPN for STD & ENS, X101-FPN for CQR
+    # Current setup: R50-C4 (no FPN) for STD, R50-FPN for ENS, X101-FPN for CQR
     'std': {
-        'model_id': 'r50fpn',
-        'model_name': 'ResNet-50-FPN',
-        'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'
+        'model_id': 'r50c4',
+        'model_name': 'ResNet-50-C4 (No FPN)',
+        'model_file': 'faster_rcnn_R_50_C4_3x.yaml'
     },
     'ens': {
         'model_id': 'r50fpn', 
@@ -47,6 +47,13 @@ BASE_MODEL_CONFIG = {
 
 # Alternative configurations for easy switching:
 # 
+# ORIGINAL SETUP (R50-FPN for STD & ENS):
+# BASE_MODEL_CONFIG = {
+#     'std': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'},
+#     'ens': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'},
+#     'cqr': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'}
+# }
+#
 # ALL R50-FPN:
 # BASE_MODEL_CONFIG = {
 #     'std': {'model_id': 'r50fpn', 'model_name': 'ResNet-50-FPN', 'model_file': 'faster_rcnn_R_50_FPN_3x.yaml'},
@@ -59,6 +66,13 @@ BASE_MODEL_CONFIG = {
 #     'std': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'},
 #     'ens': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'},
 #     'cqr': {'model_id': 'x101fpn', 'model_name': 'ResNeXt-101-FPN', 'model_file': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml'}
+# }
+#
+# R50-C4 (No FPN) for comparison:
+# BASE_MODEL_CONFIG = {
+#     'std': {'model_id': 'r50c4', 'model_name': 'ResNet-50-C4 (No FPN)', 'model_file': 'faster_rcnn_R_50_C4_3x.yaml'},
+#     'ens': {'model_id': 'r50c4', 'model_name': 'ResNet-50-C4 (No FPN)', 'model_file': 'faster_rcnn_R_50_C4_3x.yaml'},
+#     'cqr': {'model_id': 'r50c4', 'model_name': 'ResNet-50-C4 (No FPN)', 'model_file': 'faster_rcnn_R_50_C4_3x.yaml'}
 # }
 
 # ============================================================================
