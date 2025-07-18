@@ -160,6 +160,7 @@ class CacheGenerator:
             'mask_rcnn_r_101_fpn': 'mask_rcnn_R_101_FPN_3x.yaml',
             'retinanet_r_50_fpn': 'retinanet_R_50_FPN_3x.yaml',
             'retinanet_r_101_fpn': 'retinanet_R_101_FPN_3x.yaml',
+            'sparse_rcnn_r101_300pro': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml',  # Sparse R-CNN uses X101 FPN config
         }
         
         # Find matching config
