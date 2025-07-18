@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 """
-Generate cache model from YOLOv3/Gaussian YOLOv3 checkpoint.
+Detectron2 Cache Generation Script (Faster R-CNN, Mask R-CNN, RetinaNet)
+========================================================================
 
-This script:
-1. Loads the YOLOv3 model from checkpoint
-2. Runs inference on COCO dataset (train and validation)
-3. Extracts features using FeatureExtractor
-4. Saves cache in the expected format for learnable scoring function training
+This script generates cache files from Detectron2 model checkpoints for conformal prediction.
+
+The cache includes:
+- Model predictions on COCO train/val sets
+- Feature vectors extracted from predictions
+- Ground truth annotations
+- Calibration/test splits for validation data
+
+Supports:
+- Faster R-CNN (R-50, R-101, X-101)
+- Mask R-CNN
+- RetinaNet
+- Other Detectron2 models
 
 Usage:
-    python generate_cache_yolo.py --checkpoint /path/to/gaussian_yolov3_coco.pth --config /path/to/gaussian_yolov3_eval.yaml
+    python generate_detectron2_cache.py
 """
 
 import os
@@ -19,7 +28,6 @@ import pickle
 import torch
 import numpy as np
 import cv2
-import yaml
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict
@@ -32,27 +40,56 @@ warnings.filterwarnings('ignore')
 sys.path.append(str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "detectron2"))
 
-# Import YOLOv3 components
-try:
-    from gaussian_yolo.yolov3 import YOLOv3
-    from gaussian_yolo import utils as yolo_utils
-    print("YOLOv3 imported successfully")
-except ImportError as e:
-    print(f"Error importing YOLOv3: {e}")
-    print("Please check that YOLOv3 components are available")
-    sys.exit(1)
+# ================================================================================
+# CONFIGURATION SECTION - Modify these parameters for your experiments
+# ================================================================================
 
-# Import detectron2 for dataset handling
+# Model Configuration
+CHECKPOINT_PATH = "/ssd_4TB/divake/conformal-od/checkpoints/faster_rcnn_R_50_FPN_3x.pkl"
+CONFIG_PATH = None  # Auto-determined from checkpoint name if None
+
+# Example checkpoints:
+# - ResNet-50: "/path/to/faster_rcnn_R_50_FPN_3x.pkl" 
+# - ResNet-101: "/path/to/faster_rcnn_R_101_FPN_3x.pkl"
+# - X-101: "/path/to/faster_rcnn_X_101_32x8d_FPN_3x.pkl"
+# - Mask R-CNN: "/path/to/mask_rcnn_R_50_FPN_3x.pkl"
+
+# Output Configuration  
+OUTPUT_DIR = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50"
+
+# Dataset Configuration
+COCO_DIR = "/ssd_4TB/divake/conformal-od/data/coco"  # Path to COCO dataset
+
+# Dataset Limits (set to None for full dataset)
+MAX_TRAIN_IMAGES = None  # None for full COCO train set (118k images)
+MAX_VAL_IMAGES = None    # None for full COCO val set (5k images)
+
+# Model Inference Configuration
+CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for predictions (0.05-0.5)
+IOU_THRESHOLD = 0.5         # IoU threshold for matching predictions to GT (0.3-0.5)
+
+# Device Configuration
+DEVICE = "auto"  # "auto", "cuda", or "cpu"
+
+# ================================================================================
+# END CONFIGURATION SECTION
+# ================================================================================
+
+# Import detectron2 components
 try:
-    from detectron2.data.datasets import register_coco_instances
+    from detectron2.config import get_cfg
+    from detectron2 import model_zoo
+    from detectron2.engine import DefaultPredictor
     from detectron2.data import MetadataCatalog, DatasetCatalog
-    from detectron2.data.build import get_detection_dataset_dicts
+    from detectron2.data.datasets import register_coco_instances
     from detectron2.structures import Boxes, Instances
     from detectron2.structures.instances import Instances as D2Instances
-    print("Detectron2 dataset utilities imported successfully")
+    from detectron2.utils.logger import setup_logger
+    from detectron2.data.build import get_detection_dataset_dicts
+    print("Detectron2 imported successfully")
 except ImportError as e:
     print(f"Error importing detectron2: {e}")
-    print("Please check that detectron2 is properly installed")
+    print("Please check that all dependencies are properly installed.")
     sys.exit(1)
 
 # Import feature extractor from learnable_scoring_fn
@@ -63,6 +100,9 @@ except ImportError as e:
     print(f"Error importing feature extractor: {e}")
     print("Make sure you're running from the correct directory")
     sys.exit(1)
+
+# Setup logger
+setup_logger()
 
 
 def annotations_to_instances(annotations, image_size):
@@ -76,7 +116,8 @@ def annotations_to_instances(annotations, image_size):
         if 'bbox' in ann:
             x, y, w, h = ann['bbox']
             boxes.append([x, y, x + w, y + h])
-            classes.append(ann['category_id'])
+            # COCO categories start from 1, but detectron2 expects 0-based
+            classes.append(ann['category_id'] - 1)
     
     if boxes:
         target.gt_boxes = Boxes(torch.tensor(boxes, dtype=torch.float32))
@@ -88,34 +129,30 @@ def annotations_to_instances(annotations, image_size):
     return target
 
 
-class YOLOCacheGenerator:
-    """Generate cache from YOLOv3/Gaussian YOLOv3 checkpoint for learnable scoring function."""
+class Detectron2CacheGenerator:
+    """Generate cache from Detectron2 model checkpoint for learnable scoring function."""
     
-    def __init__(self, checkpoint_path: str, config_path: str, coco_data_dir: str, output_dir: str,
+    def __init__(self, checkpoint_path: str, coco_data_dir: str, output_dir: str, 
                  device: str = "auto", confidence_threshold: float = 0.1,
-                 iou_threshold: float = 0.3, nms_threshold: float = 0.6, imgsize: int = 416):
+                 iou_threshold: float = 0.3, config_path: str = None):
         """
         Initialize cache generator.
         
         Args:
-            checkpoint_path: Path to YOLOv3 model checkpoint
-            config_path: Path to YOLOv3 config file (YAML)
+            checkpoint_path: Path to model checkpoint
             coco_data_dir: Path to COCO dataset directory
             output_dir: Directory to save cache files
             device: Device to use ("auto", "cuda", "cpu")
             confidence_threshold: Minimum confidence threshold for predictions
             iou_threshold: IoU threshold for matching predictions to ground truth
-            nms_threshold: NMS threshold for YOLOv3 postprocessing
-            imgsize: Input image size for YOLOv3
+            config_path: Path to model config file (if None, auto-determined from checkpoint)
         """
         self.checkpoint_path = checkpoint_path
-        self.config_path = config_path
         self.coco_data_dir = Path(coco_data_dir)
         self.output_dir = Path(output_dir)
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
-        self.nms_threshold = nms_threshold
-        self.imgsize = imgsize
+        self.config_path = config_path
         
         # Auto-detect device
         if device == "auto":
@@ -127,91 +164,101 @@ class YOLOCacheGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize model
+        self.predictor = None
         self.model = None
-        self.nr_class = 80  # COCO classes
         
         print(f"Using device: {self.device}")
         print(f"Checkpoint: {checkpoint_path}")
-        print(f"Config: {config_path}")
         print(f"COCO data directory: {coco_data_dir}")
         print(f"Output directory: {output_dir}")
         print(f"Confidence threshold: {confidence_threshold}")
         print(f"IoU matching threshold: {iou_threshold}")
-        print(f"NMS threshold: {nms_threshold}")
-        print(f"Image size: {imgsize}")
+        if config_path:
+            print(f"Config path: {config_path}")
         print()
     
     def setup_model(self):
-        """Setup the YOLOv3 model from checkpoint."""
-        print("Setting up YOLOv3 model...")
+        """Setup the model from checkpoint."""
+        print("Setting up model...")
         
-        # Load config
-        with open(self.config_path, 'r') as f:
-            cfg = yaml.safe_load(f)
+        # Create config
+        cfg = get_cfg()
         
-        model_config = cfg['MODEL']
-        
-        # Create model
-        self.model = YOLOv3(model_config)
-        
-        # Load checkpoint
-        print(f"Loading checkpoint {self.checkpoint_path}")
-        state = torch.load(self.checkpoint_path, map_location='cpu')
-        
-        if 'model_state_dict' in state.keys():
-            self.model.load_state_dict(state['model_state_dict'])
+        # Determine config path
+        if self.config_path:
+            config_path = self.config_path
         else:
-            self.model.load_state_dict(state)
+            # Auto-determine config based on checkpoint name
+            config_path = self._auto_determine_config_path()
         
-        self.model.eval()
+        print(f"Using config: {config_path}")
+        cfg.merge_from_file(config_path)
         
-        if self.device == "cuda":
-            self.model.cuda()
+        # Set the checkpoint path
+        cfg.MODEL.WEIGHTS = self.checkpoint_path
         
-        print("YOLOv3 model setup completed")
+        # Set confidence threshold
+        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = self.confidence_threshold
+        
+        # Set device
+        cfg.MODEL.DEVICE = self.device
+        
+        # Create predictor
+        self.predictor = DefaultPredictor(cfg)
+        self.model = self.predictor.model
+        
+        print("Model setup completed")
         print(f"Model device: {next(self.model.parameters()).device}")
+
+    def _auto_determine_config_path(self):
+        """Auto-determine config path based on checkpoint filename."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(script_dir)
+        
+        checkpoint_name = os.path.basename(self.checkpoint_path).lower()
+        
+        # Map common checkpoint names to config files
+        config_mapping = {
+            'faster_rcnn_r_50_fpn': 'faster_rcnn_R_50_FPN_3x.yaml',
+            'faster_rcnn_r_101_fpn': 'faster_rcnn_R_101_FPN_3x.yaml',
+            'faster_rcnn_x_101_32x8d_fpn': 'faster_rcnn_X_101_32x8d_FPN_3x.yaml',
+            'mask_rcnn_r_50_fpn': 'mask_rcnn_R_50_FPN_3x.yaml',
+            'mask_rcnn_r_101_fpn': 'mask_rcnn_R_101_FPN_3x.yaml',
+            'retinanet_r_50_fpn': 'retinanet_R_50_FPN_3x.yaml',
+            'retinanet_r_101_fpn': 'retinanet_R_101_FPN_3x.yaml',
+        }
+        
+        # Find matching config
+        for key, config_file in config_mapping.items():
+            if key in checkpoint_name:
+                return os.path.join(project_root, "detectron2/configs/COCO-Detection", config_file)
+        
+        # Default fallback
+        print(f"Warning: Could not auto-determine config for {checkpoint_name}, using R-50 FPN default")
+        return os.path.join(project_root, "detectron2/configs/COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     
     def register_coco_datasets(self):
         """Register COCO datasets with detectron2."""
         print("Registering COCO datasets...")
         
-        # Register training dataset
-        train_json = self.coco_data_dir / "annotations/instances_train2017.json"
+        # Register train dataset
+        train_json = self.coco_data_dir / "annotations" / "instances_train2017.json"
         train_images = self.coco_data_dir / "train2017"
         
         if "coco_train" not in DatasetCatalog:
             register_coco_instances("coco_train", {}, str(train_json), str(train_images))
         
-        train_metadata = MetadataCatalog.get("coco_train")
         print(f"Registered train dataset: {len(DatasetCatalog.get('coco_train'))} images")
         
-        # Register validation dataset
-        val_json = self.coco_data_dir / "annotations/instances_val2017.json"
+        # Register val dataset
+        val_json = self.coco_data_dir / "annotations" / "instances_val2017.json"
         val_images = self.coco_data_dir / "val2017"
         
         if "coco_val" not in DatasetCatalog:
             register_coco_instances("coco_val", {}, str(val_json), str(val_images))
         
-        val_metadata = MetadataCatalog.get("coco_val")
         print(f"Registered val dataset: {len(DatasetCatalog.get('coco_val'))} images")
         print()
-    
-    def preprocess_image(self, image_path: str) -> Tuple[torch.Tensor, Tuple]:
-        """Preprocess image for YOLOv3 inference."""
-        # Read image
-        img = cv2.imread(image_path)
-        if img is None:
-            return None, None
-        
-        # Preprocess for YOLO
-        img, info_img = yolo_utils.preprocess(img, self.imgsize, jitter=0)
-        img = np.transpose(img / 255.0, (2, 0, 1))
-        img = torch.from_numpy(img).float().unsqueeze(0)
-        
-        if self.device == "cuda":
-            img = img.cuda()
-        
-        return img, info_img
     
     def run_inference_on_dataset(self, dataset_name: str, max_images: Optional[int] = None) -> Tuple[List[Dict], List[Dict]]:
         """
@@ -239,54 +286,39 @@ class YOLOCacheGenerator:
         # Process each image
         for idx, record in enumerate(tqdm(dataset_dicts, desc=f"Processing {dataset_name}")):
             try:
-                # Load and preprocess image
+                # Load image
                 image_path = record["file_name"]
                 if not os.path.exists(image_path):
                     continue
                 
-                img_tensor, info_img = self.preprocess_image(image_path)
-                if img_tensor is None:
+                img = cv2.imread(image_path)
+                if img is None:
                     continue
                 
-                # Run YOLOv3 inference
-                with torch.no_grad():
-                    outputs = self.model(img_tensor)
-                    outputs = yolo_utils.postprocess(
-                        outputs, self.nr_class, self.confidence_threshold, self.nms_threshold
-                    )
-                
-                # Process YOLOv3 outputs
-                if outputs[0] is None:
-                    continue
+                # Run inference
+                outputs = self.predictor(img)
                 
                 # Extract predictions
-                yolo_preds = outputs[0]
-                num_preds = len(yolo_preds)
+                instances = outputs["instances"]
+                if len(instances) == 0:
+                    continue
                 
-                pred_boxes = torch.zeros((num_preds, 4))
-                pred_classes = torch.zeros((num_preds,))
-                pred_scores = torch.zeros((num_preds,))
-                
-                for i, pred in enumerate(yolo_preds):
-                    x1, y1, x2, y2, obj_conf, cls_conf, cls_pred = pred[:7]
-                    
-                    # Convert to image coordinates
-                    box = yolo_utils.yolobox2label([y1, x1, y2, x2], info_img)
-                    pred_boxes[i] = torch.tensor(box)
-                    pred_classes[i] = cls_pred
-                    pred_scores[i] = obj_conf * cls_conf
+                # Convert to CPU and numpy
+                pred_boxes = instances.pred_boxes.tensor.cpu().numpy()
+                pred_scores = instances.scores.cpu().numpy()
+                pred_classes = instances.pred_classes.cpu().numpy()
                 
                 # Create prediction dictionary
                 pred_dict = {
-                    'pred_coords': pred_boxes.numpy(),
-                    'pred_cls': pred_classes.numpy().astype(int),
-                    'pred_score': pred_scores.numpy(),
+                    'pred_coords': pred_boxes,
+                    'pred_cls': pred_classes,
+                    'pred_score': pred_scores,
                     'img_id': record.get('image_id', idx),
-                    'height': record.get('height', info_img[0]),
-                    'width': record.get('width', info_img[1])
+                    'height': record['height'],
+                    'width': record['width']
                 }
                 
-                # Extract ground truth using detectron2 format
+                # Extract ground truth
                 gt = annotations_to_instances(record["annotations"], (record["height"], record["width"]))
                 gt_boxes = gt.gt_boxes.tensor.numpy()
                 gt_classes = gt.gt_classes.numpy()
@@ -295,8 +327,8 @@ class YOLOCacheGenerator:
                     'gt_coords': gt_boxes,
                     'gt_cls': gt_classes,
                     'img_id': record.get('image_id', idx),
-                    'height': record.get('height', info_img[0]),
-                    'width': record.get('width', info_img[1])
+                    'height': record['height'],
+                    'width': record['width']
                 }
                 
                 predictions.append(pred_dict)
@@ -357,7 +389,7 @@ class YOLOCacheGenerator:
                     gt_class = gt_classes[best_gt_idx]
                     gt_box = gt_boxes[best_gt_idx]
                     
-                    # Create matched pair (removed class matching requirement for comprehensive cache generation)
+                    # Create matched pair
                     matched_pred = {
                         'pred_coords': pred_box,
                         'pred_cls': pred_class,
@@ -562,9 +594,9 @@ class YOLOCacheGenerator:
                 print(f"  {file_path.name}: {size_mb:.1f} MB")
     
     def generate_cache(self, max_train_images: Optional[int] = None, max_val_images: Optional[int] = None):
-        """Generate complete cache from YOLOv3 checkpoint."""
+        """Generate complete cache from model checkpoint."""
         print("="*80)
-        print("GENERATING CACHE FROM YOLOV3 CHECKPOINT")
+        print("GENERATING CACHE FROM DETECTRON2 MODEL")
         print("="*80)
         
         # Setup model
@@ -607,65 +639,80 @@ class YOLOCacheGenerator:
         print("="*80)
 
 
+def verify_configuration():
+    """Verify that all configured paths exist."""
+    errors = []
+    
+    # Check checkpoint
+    if not os.path.exists(CHECKPOINT_PATH):
+        errors.append(f"Checkpoint not found: {CHECKPOINT_PATH}")
+    
+    # Check COCO dataset
+    if not os.path.exists(COCO_DIR):
+        errors.append(f"COCO directory not found: {COCO_DIR}")
+    else:
+        # Verify COCO structure
+        required_paths = [
+            os.path.join(COCO_DIR, "annotations"),
+            os.path.join(COCO_DIR, "annotations/instances_train2017.json"),
+            os.path.join(COCO_DIR, "annotations/instances_val2017.json"),
+            os.path.join(COCO_DIR, "train2017"),
+            os.path.join(COCO_DIR, "val2017")
+        ]
+        for path in required_paths:
+            if not os.path.exists(path):
+                errors.append(f"COCO component missing: {path}")
+    
+    if errors:
+        print("Configuration errors found:")
+        for error in errors:
+            print(f"  - {error}")
+        print("\nPlease fix the configuration at the top of this script.")
+        return False
+    
+    return True
+
+
 def main():
     """Main function."""
-    parser = argparse.ArgumentParser(description="Generate cache from YOLOv3 checkpoint")
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Path to YOLOv3 checkpoint")
-    parser.add_argument("--config", type=str, required=True,
-                        help="Path to YOLOv3 config file (YAML)")
-    parser.add_argument("--coco-dir", type=str, required=True,
-                        help="Path to COCO dataset directory")
-    parser.add_argument("--output-dir", type=str, required=True,
-                        help="Output directory for cache files")
-    parser.add_argument("--device", type=str, default="auto",
-                        help="Device to use (auto, cpu, cuda)")
-    parser.add_argument("--confidence-threshold", type=float, default=0.5,
-                        help="Minimum confidence threshold for predictions")
-    parser.add_argument("--iou-threshold", type=float, default=0.5,
-                        help="IoU threshold for matching predictions to ground truth")
-    parser.add_argument("--nms-threshold", type=float, default=0.6,
-                        help="NMS threshold for YOLOv3 postprocessing")
-    parser.add_argument("--imgsize", type=int, default=416,
-                        help="Input image size for YOLOv3")
-    parser.add_argument("--max-train-images", type=int, default=None,
-                        help="Maximum training images to process (for testing)")
-    parser.add_argument("--max-val-images", type=int, default=None,
-                        help="Maximum validation images to process (for testing)")
+    print("="*80)
+    print("DETECTRON2 CACHE GENERATION")
+    print("="*80)
+    print()
     
-    args = parser.parse_args()
+    # Display configuration
+    print("Current Configuration:")
+    print(f"  Checkpoint: {CHECKPOINT_PATH}")
+    print(f"  Config: {CONFIG_PATH or 'Auto-determined'}")
+    print(f"  COCO Directory: {COCO_DIR}")
+    print(f"  Output Directory: {OUTPUT_DIR}")
+    print(f"  Max Train Images: {MAX_TRAIN_IMAGES or 'All'}")
+    print(f"  Max Val Images: {MAX_VAL_IMAGES or 'All'}")
+    print(f"  Confidence Threshold: {CONFIDENCE_THRESHOLD}")
+    print(f"  IoU Threshold: {IOU_THRESHOLD}")
+    print(f"  Device: {DEVICE}")
+    print()
     
-    # Validate inputs
-    if not os.path.exists(args.checkpoint):
-        print(f"Error: Checkpoint file {args.checkpoint} does not exist")
-        return 1
-    
-    if not os.path.exists(args.config):
-        print(f"Error: Config file {args.config} does not exist")
-        return 1
-    
-    if not os.path.exists(args.coco_dir):
-        print(f"Error: COCO directory {args.coco_dir} does not exist")
+    # Verify configuration
+    if not verify_configuration():
         return 1
     
     # Create cache generator
-    generator = YOLOCacheGenerator(
-        checkpoint_path=args.checkpoint,
-        config_path=args.config,
-        coco_data_dir=args.coco_dir,
-        output_dir=args.output_dir,
-        device=args.device,
-        confidence_threshold=args.confidence_threshold,
-        iou_threshold=args.iou_threshold,
-        nms_threshold=args.nms_threshold,
-        imgsize=args.imgsize
+    generator = Detectron2CacheGenerator(
+        checkpoint_path=CHECKPOINT_PATH,
+        coco_data_dir=COCO_DIR,
+        output_dir=OUTPUT_DIR,
+        device=DEVICE,
+        confidence_threshold=CONFIDENCE_THRESHOLD,
+        iou_threshold=IOU_THRESHOLD,
+        config_path=CONFIG_PATH
     )
     
     # Generate cache
     try:
         generator.generate_cache(
-            max_train_images=args.max_train_images,
-            max_val_images=args.max_val_images
+            max_train_images=MAX_TRAIN_IMAGES,
+            max_val_images=MAX_VAL_IMAGES
         )
         return 0
     except Exception as e:
@@ -676,4 +723,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main()) 
+    exit(main())
