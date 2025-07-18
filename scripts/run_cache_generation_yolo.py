@@ -34,10 +34,15 @@ def main():
     max_val_images = None    # Set to None for full COCO val set (5k images)
     
     # Threshold Configuration
-    confidence_threshold = 0.5  # Confidence threshold for YOLOv3 predictions
-    iou_threshold = 0.5         # IoU threshold for matching predictions to GT
+    confidence_threshold = 0.5  # Lower for comprehensive cache generation (0.05-0.2 recommended)
+    iou_threshold = 0.5         # IoU threshold for matching predictions to GT (0.3-0.5 recommended)
     nms_threshold = 0.6         # NMS threshold for YOLOv3 postprocessing
     imgsize = 416               # Input image size for YOLOv3
+    
+    # Example threshold combinations:
+    # Conservative (fewer but higher quality samples): conf=0.2, iou=0.5
+    # Comprehensive (more samples): conf=0.1, iou=0.3  
+    # Very comprehensive: conf=0.05, iou=0.3
     
     # Device Configuration
     device = "auto"

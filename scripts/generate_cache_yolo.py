@@ -357,28 +357,26 @@ class YOLOCacheGenerator:
                     gt_class = gt_classes[best_gt_idx]
                     gt_box = gt_boxes[best_gt_idx]
                     
-                    # Class matching (optional - can be disabled)
-                    if pred_class == gt_class:
-                        # Create matched pair
-                        matched_pred = {
-                            'pred_coords': pred_box,
-                            'pred_cls': pred_class,
-                            'pred_score': pred_score,
-                            'img_id': pred_dict['img_id'],
-                            'height': pred_dict['height'],
-                            'width': pred_dict['width']
-                        }
-                        
-                        matched_label = {
-                            'gt_coords': gt_box,
-                            'gt_cls': gt_class,
-                            'img_id': label_dict['img_id'],
-                            'height': label_dict['height'],
-                            'width': label_dict['width']
-                        }
-                        
-                        matched_predictions.append(matched_pred)
-                        matched_labels.append(matched_label)
+                    # Create matched pair (removed class matching requirement for comprehensive cache generation)
+                    matched_pred = {
+                        'pred_coords': pred_box,
+                        'pred_cls': pred_class,
+                        'pred_score': pred_score,
+                        'img_id': pred_dict['img_id'],
+                        'height': pred_dict['height'],
+                        'width': pred_dict['width']
+                    }
+                    
+                    matched_label = {
+                        'gt_coords': gt_box,
+                        'gt_cls': gt_class,
+                        'img_id': label_dict['img_id'],
+                        'height': label_dict['height'],
+                        'width': label_dict['width']
+                    }
+                    
+                    matched_predictions.append(matched_pred)
+                    matched_labels.append(matched_label)
         
         print(f"Total predictions across all images: {total_predictions}")
         print(f"Total ground truth boxes: {total_gt}")
