@@ -71,7 +71,7 @@ MODEL:
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml
   ID: fast_r50fpn
   IOU_THRESH_TEST: 0.5
-  LOCAL_CHECKPOINT: false
+  LOCAL_CHECKPOINT: true
   NAME: Fast R-CNN R50-FPN
 PROJECT:
   CHECKPOINT_DIR: checkpoints

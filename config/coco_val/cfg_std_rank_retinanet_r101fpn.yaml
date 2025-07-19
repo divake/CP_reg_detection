@@ -72,7 +72,7 @@ MODEL:
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/retinanet_R_101_FPN_3x.yaml
   ID: retinanet_r101fpn
   IOU_THRESH_TEST: 0.5
-  LOCAL_CHECKPOINT: false
+  LOCAL_CHECKPOINT: true
   NAME: RetinaNet R101-FPN
 PROJECT:
   CHECKPOINT_DIR: checkpoints

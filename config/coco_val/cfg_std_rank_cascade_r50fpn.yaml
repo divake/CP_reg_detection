@@ -27,7 +27,7 @@ DATASETS:
 MODEL:
   AP_EVAL: false
   BOX_MATCHING: box
-  CHECKPOINT_PATH: null
+  CHECKPOINT_PATH: /ssd_4TB/divake/conformal-od/checkpoints/cascade_mask_rcnn_R_50_FPN_3x.pkl
   CLASS_MATCHING: false
   CONFIG:
     DATALOADER:
@@ -74,7 +74,7 @@ MODEL:
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml
   ID: cascade_r50fpn
   IOU_THRESH_TEST: 0.5
-  LOCAL_CHECKPOINT: false
+  LOCAL_CHECKPOINT: true
   NAME: Cascade R-CNN R50-FPN
 PROJECT:
   CHECKPOINT_DIR: checkpoints

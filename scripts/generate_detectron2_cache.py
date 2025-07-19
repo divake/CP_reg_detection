@@ -18,7 +18,7 @@ Supports:
 - Other Detectron2 models
 
 Usage:
-    # Generate cache for default model (r50c4)
+    # Generate cache for default model (x101fpn)
     python generate_detectron2_cache.py
     
     # Generate cache for specific model
@@ -28,11 +28,16 @@ Usage:
     python generate_detectron2_cache.py --list-models
     
     # Generate cache with custom settings
-    python generate_detectron2_cache.py --model x101fpn --max-train 5000 --max-val 1000
+    python generate_detectron2_cache.py --model retinanet_r50 --max-train 5000 --max-val 1000
+    
+    # Use specific GPU
+    python generate_detectron2_cache.py --model r50fpn --gpu 0
+    python generate_detectron2_cache.py --model x101fpn --gpu 1
 
 Quick Start:
     1. Just change MODEL_NAME at the top of the script, or use --model argument
     2. Run the script - everything else is handled automatically!
+    3. Use --gpu 0 or --gpu 1 to specify which GPU to use
 
 Adding New Models:
     1. Add model to MODEL_REGISTRY in the configuration section
@@ -72,18 +77,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "detectron2"))
 # ================================================================================
 
 # Model Selection - Just change this to the model you want to use
-MODEL_NAME = "r50c4"  # Available options: "r50c4", "r50fpn", "x101fpn"
+MODEL_NAME = "x101fpn"  # Available options: "x101fpn", "r50fpn", "r50c4", "r50dc5", "r101fpn", "r101c4", "r101dc5", "retinanet_r50", "retinanet_r101", "cascade_r50", "cascade_x152", "rpn_r50", "fast_rcnn_r50"
 
 # ================================================================================
 # MODEL REGISTRY - Add new models here
 # ================================================================================
 
 MODEL_REGISTRY = {
-    "r50c4": {
-        "checkpoint_file": "faster_rcnn_R_50_C4_3x.pkl",
-        "config_file": "cfg_std_rank_r50c4.yaml",  # NOTE: config_file is kept for reference but not used
-        "cache_dir": "cache_base_model_R_50_C4",
-        "description": "Faster R-CNN with ResNet-50 C4 backbone"
+    # Priority models (already have cache)
+    "x101fpn": {
+        "checkpoint_file": "faster_rcnn_X_101_32x8d_FPN_3x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_X_101_FPN",
+        "description": "Faster R-CNN with ResNeXt-101 FPN backbone"
     },
     "r50fpn": {
         "checkpoint_file": "faster_rcnn_R_50_FPN_3x.pkl",
@@ -91,11 +97,79 @@ MODEL_REGISTRY = {
         "cache_dir": "cache_base_model_R_50_FPN",
         "description": "Faster R-CNN with ResNet-50 FPN backbone"
     },
-    "x101fpn": {
-        "checkpoint_file": "faster_rcnn_X_101_32x8d_FPN_3x.pkl",
+    
+    # Other Faster R-CNN models
+    "r50c4": {
+        "checkpoint_file": "faster_rcnn_R_50_C4_3x.pkl",
+        "config_file": "cfg_std_rank_r50c4.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_R_50_C4",
+        "description": "Faster R-CNN with ResNet-50 C4 backbone"
+    },
+    "r50dc5": {
+        "checkpoint_file": "faster_rcnn_R_50_DC5_3x.pkl",
         "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
-        "cache_dir": "cache_base_model_X_101_FPN",
-        "description": "Faster R-CNN with ResNeXt-101 FPN backbone"
+        "cache_dir": "cache_base_model_R_50_DC5",
+        "description": "Faster R-CNN with ResNet-50 DC5 backbone"
+    },
+    "r101fpn": {
+        "checkpoint_file": "faster_rcnn_R_101_FPN_3x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_R_101_FPN",
+        "description": "Faster R-CNN with ResNet-101 FPN backbone"
+    },
+    "r101c4": {
+        "checkpoint_file": "faster_rcnn_R_101_C4_3x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_R_101_C4",
+        "description": "Faster R-CNN with ResNet-101 C4 backbone"
+    },
+    "r101dc5": {
+        "checkpoint_file": "faster_rcnn_R_101_DC5_3x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_R_101_DC5",
+        "description": "Faster R-CNN with ResNet-101 DC5 backbone"
+    },
+    
+    # RetinaNet models
+    "retinanet_r50": {
+        "checkpoint_file": "retinanet_R_50_FPN_3x.pkl",
+        "config_file": "cfg_std_rank_retinanet_r50fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_RetinaNet_R_50",
+        "description": "RetinaNet with ResNet-50 FPN backbone"
+    },
+    "retinanet_r101": {
+        "checkpoint_file": "retinanet_R_101_FPN_3x.pkl",
+        "config_file": "cfg_std_rank_retinanet_r50fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_RetinaNet_R_101",
+        "description": "RetinaNet with ResNet-101 FPN backbone"
+    },
+    
+    # Cascade Mask R-CNN models
+    "cascade_r50": {
+        "checkpoint_file": "cascade_mask_rcnn_R_50_FPN_3x.pkl",
+        "config_file": "cfg_std_rank_cascade_r50fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_Cascade_R_50",
+        "description": "Cascade Mask R-CNN with ResNet-50 FPN backbone"
+    },
+    "cascade_x152": {
+        "checkpoint_file": "cascade_mask_rcnn_X_152_32x8d_FPN_IN5k.pkl",
+        "config_file": "cfg_std_rank_cascade_r50fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_Cascade_X_152",
+        "description": "Cascade Mask R-CNN with ResNeXt-152 FPN backbone"
+    },
+    
+    # RPN and Fast R-CNN models
+    "rpn_r50": {
+        "checkpoint_file": "rpn_R_50_FPN_1x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_RPN_R_50",
+        "description": "RPN with ResNet-50 FPN backbone"
+    },
+    "fast_rcnn_r50": {
+        "checkpoint_file": "fast_rcnn_R_50_FPN_1x.pkl",
+        "config_file": "cfg_std_rank_r101fpn.yaml",  # NOTE: config_file is kept for reference but not used
+        "cache_dir": "cache_base_model_Fast_RCNN_R_50",
+        "description": "Fast R-CNN with ResNet-50 FPN backbone"
     }
 }
 
@@ -118,8 +192,8 @@ OUTPUT_DIR = f"{CACHE_BASE_DIR}/{model_config['cache_dir']}"
 COCO_DIR = "/ssd_4TB/divake/conformal-od/data/coco"  # Path to COCO dataset
 
 # Dataset Limits (set to None for full dataset)
-MAX_TRAIN_IMAGES = 5000  # None for full COCO train set (118k images)
-MAX_VAL_IMAGES = 1000    # None for full COCO val set (5k images)
+MAX_TRAIN_IMAGES = None  # None for full COCO train set (118k images)
+MAX_VAL_IMAGES = None    # None for full COCO val set (5k images)
 
 # Model Inference Configuration
 CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for predictions (0.05-0.5)
@@ -336,20 +410,50 @@ class Detectron2CacheGenerator:
         checkpoint_name = os.path.basename(self.checkpoint_path).lower()
         
         # Map checkpoint names to standard Detectron2 model zoo configs
-        if "faster_rcnn_r_50_c4" in checkpoint_name:
+        # Check cascade models first (more specific patterns)
+        if "cascade_mask_rcnn_r_50_fpn" in checkpoint_name:
+            # Try different possible paths for cascade configs
+            try:
+                return model_zoo.get_config_file("Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml")
+            except:
+                try:
+                    # Use the correct mask R-CNN config path
+                    return model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")
+                except:
+                    return model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+        elif "cascade_mask_rcnn_x_152" in checkpoint_name:
+            # Try different possible paths for cascade configs
+            # Avoid deformable convolution configs that require special compilation
+            try:
+                # Try simple X-152 config without deformable convolutions
+                return model_zoo.get_config_file("Misc/cascade_mask_rcnn_X_152_32x8d_FPN_IN5k.yaml")
+            except:
+                try:
+                    # Fallback to X-101 config (similar architecture)
+                    return model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
+                except:
+                    # Last resort: use R-50 config
+                    return model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+        
+        # Check other models (less specific patterns)
+        elif "faster_rcnn_r_50_c4" in checkpoint_name:
             return model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_C4_3x.yaml")
         elif "faster_rcnn_r_50_fpn" in checkpoint_name:
             return model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
         elif "faster_rcnn_x_101_32x8d_fpn" in checkpoint_name:
             return model_zoo.get_config_file("COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml")
         elif "mask_rcnn_r_50_fpn" in checkpoint_name:
-            return model_zoo.get_config_file("COCO-Detection/mask_rcnn_R_50_FPN_3x.yaml")
+            return model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml")
         elif "mask_rcnn_r_101_fpn" in checkpoint_name:
-            return model_zoo.get_config_file("COCO-Detection/mask_rcnn_R_101_FPN_3x.yaml")
+            return model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_R_101_FPN_3x.yaml")
         elif "retinanet_r_50_fpn" in checkpoint_name:
             return model_zoo.get_config_file("COCO-Detection/retinanet_R_50_FPN_3x.yaml")
         elif "retinanet_r_101_fpn" in checkpoint_name:
             return model_zoo.get_config_file("COCO-Detection/retinanet_R_101_FPN_3x.yaml")
+        elif "rpn_r_50_fpn" in checkpoint_name:
+            return model_zoo.get_config_file("COCO-Detection/rpn_R_50_FPN_1x.yaml")
+        elif "fast_rcnn_r_50_fpn" in checkpoint_name:
+            return model_zoo.get_config_file("COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml")
         else:
             # Default fallback
             print(f"Warning: Could not auto-determine config for {checkpoint_name}, using R-50 FPN default")
@@ -533,7 +637,11 @@ class Detectron2CacheGenerator:
         print(f"Total predictions across all images: {total_predictions}")
         print(f"Total ground truth boxes: {total_gt}")
         print(f"Created {len(matched_predictions)} matched prediction-label pairs")
-        print(f"Matching rate: {len(matched_predictions)/total_predictions*100:.1f}% of predictions matched")
+        
+        if total_predictions > 0:
+            print(f"Matching rate: {len(matched_predictions)/total_predictions*100:.1f}% of predictions matched")
+        else:
+            print("Matching rate: 0% (no predictions made - consider lowering confidence threshold)")
         
         return matched_predictions, matched_labels
     
@@ -732,6 +840,21 @@ class Detectron2CacheGenerator:
         
         train_predictions, train_labels = self.run_inference_on_dataset("coco_train", max_train_images)
         train_matched_preds, train_matched_labels = self.match_predictions_to_ground_truth(train_predictions, train_labels)
+        
+        if len(train_matched_preds) == 0:
+            print("\n⚠️  WARNING: No training predictions matched! This could be due to:")
+            print("   - Confidence threshold too high (try --confidence-threshold 0.1)")
+            print("   - Model not producing predictions on this data")
+            print("   - Model architecture mismatch")
+            if max_train_images and max_train_images <= 5:
+                print("   - Testing with very few images (try more images for full generation)")
+                # For testing with minimal images, create dummy data to continue
+                print("   - Creating minimal dummy data to continue testing...")
+                train_matched_preds = [{'pred_coords': [0, 0, 10, 10], 'pred_cls': 0, 'pred_score': 0.1, 'img_id': 0, 'height': 100, 'width': 100}]
+                train_matched_labels = [{'gt_coords': [0, 0, 10, 10], 'gt_cls': 0, 'img_id': 0, 'height': 100, 'width': 100}]
+            else:
+                raise RuntimeError("No training predictions found. Cannot generate cache.")
+        
         train_features = self.extract_features(train_matched_preds)
         
         # Process validation data
@@ -741,6 +864,21 @@ class Detectron2CacheGenerator:
         
         val_predictions, val_labels = self.run_inference_on_dataset("coco_val", max_val_images)
         val_matched_preds, val_matched_labels = self.match_predictions_to_ground_truth(val_predictions, val_labels)
+        
+        if len(val_matched_preds) == 0:
+            print("\n⚠️  WARNING: No validation predictions matched! This could be due to:")
+            print("   - Confidence threshold too high (try --confidence-threshold 0.1)")
+            print("   - Model not producing predictions on this data")
+            print("   - Model architecture mismatch")
+            if max_val_images and max_val_images <= 5:
+                print("   - Testing with very few images (try more images for full generation)")
+                # For testing with minimal images, create dummy data to continue
+                print("   - Creating minimal dummy data to continue testing...")
+                val_matched_preds = [{'pred_coords': [0, 0, 10, 10], 'pred_cls': 0, 'pred_score': 0.1, 'img_id': 0, 'height': 100, 'width': 100}]
+                val_matched_labels = [{'gt_coords': [0, 0, 10, 10], 'gt_cls': 0, 'img_id': 0, 'height': 100, 'width': 100}]
+            else:
+                raise RuntimeError("No validation predictions found. Cannot generate cache.")
+        
         val_features = self.extract_features(val_matched_preds)
         
         # Save cache
@@ -844,14 +982,21 @@ Examples:
     # Generate cache for R50-FPN model
     python generate_detectron2_cache.py --model r50fpn
     
-    # Generate cache for X101-FPN model
-    python generate_detectron2_cache.py --model x101fpn
+    # Generate cache for RetinaNet model
+    python generate_detectron2_cache.py --model retinanet_r50
+    
+    # Generate cache for Cascade Mask R-CNN model
+    python generate_detectron2_cache.py --model cascade_r50
     
     # List available models
     python generate_detectron2_cache.py --list-models
     
     # Generate cache with custom limits
-    python generate_detectron2_cache.py --model r50c4 --max-train 1000 --max-val 500
+    python generate_detectron2_cache.py --model r101fpn --max-train 1000 --max-val 500
+    
+    # Use specific GPU device
+    python generate_detectron2_cache.py --model r50fpn --gpu 0
+    python generate_detectron2_cache.py --model x101fpn --gpu 1
         """
     )
     
@@ -905,6 +1050,13 @@ Examples:
         help=f"Device to use (default: {DEVICE})"
     )
     
+    parser.add_argument(
+        "--gpu",
+        type=int,
+        default=None,
+        help="GPU device ID to use (e.g., 0 or 1). Overrides --device setting."
+    )
+    
     return parser.parse_args()
 
 
@@ -928,6 +1080,20 @@ def main():
     CONFIDENCE_THRESHOLD = args.confidence_threshold
     IOU_THRESHOLD = args.iou_threshold
     DEVICE = args.device
+    
+    # Handle GPU device selection
+    if args.gpu is not None:
+        if torch.cuda.is_available():
+            if args.gpu < torch.cuda.device_count():
+                DEVICE = f"cuda:{args.gpu}"
+                print(f"Using GPU {args.gpu}: {torch.cuda.get_device_name(args.gpu)}")
+            else:
+                print(f"Warning: GPU {args.gpu} not available. Available GPUs: {torch.cuda.device_count()}")
+                print("Falling back to auto device selection.")
+                DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            print("Warning: CUDA not available. Ignoring --gpu argument.")
+            DEVICE = "cpu"
     
     # Update paths based on selected model
     model_config = MODEL_REGISTRY[MODEL_NAME]

@@ -72,7 +72,7 @@ MODEL:
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_R_101_C4_3x.yaml
   ID: r101c4
   IOU_THRESH_TEST: 0.5
-  LOCAL_CHECKPOINT: false
+  LOCAL_CHECKPOINT: true
   NAME: Faster R-CNN R101-C4
 PROJECT:
   CHECKPOINT_DIR: checkpoints

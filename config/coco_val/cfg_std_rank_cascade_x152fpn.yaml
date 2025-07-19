@@ -71,7 +71,7 @@ MODEL:
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/Misc/cascade_mask_rcnn_X_152_32x8d_FPN_IN5k_gn_dconv.yaml
   ID: cascade_x152fpn
   IOU_THRESH_TEST: 0.5
-  LOCAL_CHECKPOINT: false
+  LOCAL_CHECKPOINT: true
   NAME: Cascade Mask R-CNN X152-FPN
 PROJECT:
   CHECKPOINT_DIR: checkpoints

@@ -251,3 +251,7 @@ learnable_scoring_fn/cache_*
 verify_claude_autoupdate_disabled.sh
 
 checkpoints/
+bdd100k_det_20_labels.zip
+bdd100k_labels.zip
+bdd100k_images_100k.zip
+cache_generation_results_20250719_063835.txt
