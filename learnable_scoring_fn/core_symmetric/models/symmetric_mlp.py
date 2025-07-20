@@ -166,15 +166,8 @@ class SymmetricAdaptiveMLP(nn.Module):
             noise = torch.randn_like(widths) * 0.1
             widths = widths + noise.abs()  # Keep widths positive
         
-        # Log statistics during training (every 100 steps)
-        if self.training and self.training_step % 100 == 0:
-            with torch.no_grad():
-                mean_widths = widths.mean(dim=0)
-                std_widths = widths.std(dim=0)
-                print(f"Step {self.training_step} - Width stats:")
-                print(f"  Mean: {mean_widths.detach().cpu().numpy()}")
-                print(f"  Std:  {std_widths.detach().cpu().numpy()}")
-                print(f"  Raw range: [{raw_widths.min().item():.2f}, {raw_widths.max().item():.2f}]")
+        # Skip verbose width statistics logging during training
+        # (Keep only epoch-level summaries)
         
         if self.training:
             self.training_step += 1

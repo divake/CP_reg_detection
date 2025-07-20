@@ -104,19 +104,8 @@ class AdaptiveConformalLogger:
         """Log training phase metrics."""
         self.current_phase = 'train'
         
-        # Log every 100 batches
-        if batch_idx % 100 == 0:
-            print(f"[Train] Epoch {epoch}, Batch {batch_idx}:")
-            print(f"  Loss: {batch_metrics['total']:.4f} "
-                  f"(coverage: {batch_metrics['coverage']:.4f}, "
-                  f"efficiency: {batch_metrics['efficiency']:.4f})")
-            print(f"  Coverage rate: {batch_metrics['coverage_rate']:.3f}")
-            print(f"  Avg MPIW: {batch_metrics['avg_mpiw']:.2f} pixels")
-            print(f"  Normalized MPIW: {batch_metrics['normalized_mpiw']:.3f}")
-            
-            if 'avg_widths' in batch_metrics:
-                avg_widths = batch_metrics['avg_widths']
-                print(f"  Width stats: {avg_widths.detach().cpu().numpy()}")
+        # Skip verbose batch-wise logging - only epoch summaries needed
+        pass
     
     def log_epoch_metrics(self, epoch: int, phase: str, metrics: Dict[str, Any]):
         """Log metrics for a complete phase."""
