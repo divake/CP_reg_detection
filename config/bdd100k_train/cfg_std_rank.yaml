@@ -7,23 +7,23 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
+  OUTPUT_DIR: &outputdir "output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 
 
 DATASETS:
-  DIR: "../../../../media/atimans/hdd/datasets"
+  DIR: "data"
   DATASET:
     NAME: "bdd100k_train"
     IMG_DIR: "bdd100k/images/100k/train"
     ANN_FILE: "bdd100k/labels/det_train.json"
     METADATA_FILE: null
-    FORMAT: "bdd"
+    FORMAT: "coco"
     # set to BGR for coco, RGB for bdd and cityscapes
-    CHANNELS: &channels "RGB"
+    CHANNELS: &channels "BGR"
     # set to true for coco, false for bdd and cityscapes
-    FILTER_EMPTY: false
+    FILTER_EMPTY: true
 
 
 DATALOADER:

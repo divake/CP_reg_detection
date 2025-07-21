@@ -257,3 +257,4 @@ bdd100k_images_100k.zip
 cache_generation_results_20250719_063835.txt
 gtFine_trainvaltest.zip
 leftImg8bit_trainvaltest.zip
+checkpoints*

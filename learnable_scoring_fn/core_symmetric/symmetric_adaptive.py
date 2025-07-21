@@ -188,13 +188,22 @@ def train_symmetric_adaptive(
         output_dir: Directory to save models
         log_dir: Directory for logs
     """
-    # Generate experiment name with timestamp
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiment_name = f"symmetric_adaptive_{timestamp}"
+    # Use the output_dir directly if it already contains a timestamp
+    # Otherwise create a timestamped directory
+    experiment_dir = Path(output_dir)
     
-    # Create organized directory structure for this run
-    experiment_dir = Path(output_dir) / experiment_name
+    # Check if output_dir already has a timestamp pattern (ends with YYYYMMDD_HHMMSS)
+    import re
+    if re.search(r'\d{8}_\d{6}$', experiment_dir.name):
+        # Already has timestamp, use as is
+        experiment_name = experiment_dir.name
+    else:
+        # No timestamp, create one
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        experiment_name = f"symmetric_adaptive_{timestamp}"
+        experiment_dir = experiment_dir / experiment_name
+    
     experiment_dir.mkdir(parents=True, exist_ok=True)
     
     # Create subdirectories
@@ -204,7 +213,11 @@ def train_symmetric_adaptive(
     plot_dir.mkdir(exist_ok=True)
     
     # Initialize logger with experiment-specific directory
-    logger = AdaptiveConformalLogger(log_dir, experiment_name)
+    # Use the experiment_dir's parent if it already contains the full path
+    if re.search(r'\d{8}_\d{6}$', Path(output_dir).name):
+        logger = AdaptiveConformalLogger(str(experiment_dir.parent), experiment_name)
+    else:
+        logger = AdaptiveConformalLogger(log_dir, experiment_name)
     
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -499,19 +512,9 @@ def train_symmetric_adaptive(
     # Final summary
     logger.save_final_summary()
     
-    # Save final plots to experiment directory
-    plot_training_results(
-        history,
-        save_path=plot_dir / "final_training_results.png",
-        show=False
-    )
-    
-    plot_tau_evolution(
-        tau_calibrator.get_tau_evolution(),
-        coverage_history=history.get('coverage_rate'),
-        save_path=plot_dir / "tau_evolution.png",
-        show=False
-    )
+    # Save final plots and CSV to experiment directory
+    from .utils.visualization import create_all_plots
+    create_all_plots(history, experiment_dir, model_name='symmetric_adaptive')
     
     # Save configuration for reproducibility
     import yaml
