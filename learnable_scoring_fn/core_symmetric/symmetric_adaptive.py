@@ -367,6 +367,11 @@ def train_symmetric_adaptive(
         train_metrics['total'] = np.mean(train_losses)
         logger.log_epoch_metrics(epoch, 'train', train_metrics)
         
+        # Save training loss to history
+        if 'train_loss' not in history:
+            history['train_loss'] = []
+        history['train_loss'].append(train_metrics['total'])
+        
         # Phase 2: Calibration (skip for epoch 1)
         if epoch > 1:
             old_tau = current_tau
@@ -461,6 +466,11 @@ def train_symmetric_adaptive(
             if key not in history:
                 history[key] = []
             history[key].append(value)
+        
+        # Save size metrics to history
+        if 'size_metrics' not in history:
+            history['size_metrics'] = []
+        history['size_metrics'].append(size_metrics)
         
         # Learning rate scheduling
         if scheduler:

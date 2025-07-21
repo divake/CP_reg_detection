@@ -3,7 +3,7 @@
 
 # Training parameters
 learning_rate: 0.0005  # Lower LR for more stable training with new activation
-epochs: 100
+epochs: 50
 batch_size: 256
 early_stopping_patience: 20  # More patience for new model dynamics
 
@@ -24,7 +24,7 @@ size_normalization: true
 
 # Size targets for display
 size_targets:
-  small: 0.90
+  small: 0.92
   medium: 0.89
   large: 0.85
 
