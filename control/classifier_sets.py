@@ -369,6 +369,16 @@ class ClassThresholdSet(LabelSet):
     This is our preferred label set strategy advocated in the paper (ClassThr).
     """
 
+    def __init__(self, cfg, args, logger):
+        super().__init__(cfg, args, logger)
+        # Get valid classes for class filtering (BDD100K support)
+        if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
+            self.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"Using class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+        else:
+            self.valid_classes = None
+            logger.info("No class filtering applied - using all classes")
+
     def score(self, pred_score_all: torch.Tensor, gt_class):
         # Check if pred_score_all is 1D or 2D
         if pred_score_all.dim() == 1:
@@ -380,8 +390,25 @@ class ClassThresholdSet(LabelSet):
 
     def get_pred_set(self, pred_score_all: torch.Tensor, q=None):
         label_q = self.label_q if q is None else q
-        # get label sets via (class-conditional) thresholding
-        return (pred_score_all >= 1 - label_q).int()
+        
+        # CRITICAL FIX: Handle class filtering for BDD100K
+        if self.valid_classes is not None and pred_score_all.dim() == 2:
+            # Check if data is already filtered by comparing tensor size with valid classes
+            if pred_score_all.shape[1] == len(self.valid_classes):
+                # Data is already filtered to correct number of classes, use directly
+                return (pred_score_all >= 1 - label_q).int()
+            elif pred_score_all.shape[1] == 80:  # Original COCO classes
+                # Filter predictions to only valid classes
+                # pred_score_all: [N, 80] -> [N, 9] for BDD100K
+                pred_score_filtered = pred_score_all[:, self.valid_classes]
+                # get label sets via (class-conditional) thresholding on filtered predictions
+                return (pred_score_filtered >= 1 - label_q).int()
+            else:
+                # Unexpected tensor size, use as-is
+                return (pred_score_all >= 1 - label_q).int()
+        else:
+            # Original behavior for datasets without class filtering
+            return (pred_score_all >= 1 - label_q).int()
 
 
 def get_label_set_generator(cfg, args, logger):

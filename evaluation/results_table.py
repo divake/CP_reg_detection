@@ -18,6 +18,23 @@ import torch
 from util import util
 
 
+def get_bdd_sample_indices(data):
+    """Helper function to get properly mapped BDD100K indices for evaluation.
+    
+    This fixes the IndexError when using filtered class predictions with BDD100K.
+    Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    """
+    bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
+    valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+    
+    # Create mapping from COCO indices to filtered indices
+    if len(data) == len(valid_classes):  # Check if we're dealing with filtered data
+        index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
+        return torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+    else:
+        return torch.tensor(bdd_coco_indices)
+
+
 _default_metrics = [
     "nr calib",
     "q x0",
@@ -192,7 +209,18 @@ def get_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    samp_bdd = torch.tensor(list(util.get_bdd_as_coco_classes().values()))
+    # CRITICAL FIX: Map BDD100K COCO indices to filtered indices 
+    # Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
+    valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+    
+    # Create mapping from COCO indices to filtered indices
+    if len(data) == len(valid_classes):  # Check if we're dealing with filtered data
+        index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
+        samp_bdd = torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+    else:
+        samp_bdd = torch.tensor(bdd_coco_indices)
+    
     data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
@@ -285,7 +313,7 @@ def get_box_set_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    samp_bdd = torch.tensor(list(util.get_bdd_as_coco_classes().values()))
+    samp_bdd = get_bdd_sample_indices(data)
     data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
@@ -337,7 +365,7 @@ def get_label_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    samp_bdd = torch.tensor(list(util.get_bdd_as_coco_classes().values()))
+    samp_bdd = get_bdd_sample_indices(data)
     data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))

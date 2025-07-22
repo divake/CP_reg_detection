@@ -13,7 +13,7 @@ PROJECT:
 
 
 DATASETS:
-  DIR: "../../../../media/atimans/hdd/datasets"
+  DIR: "data"
   DATASET:
     NAME: "cityscapes"
     IMG_DIR: "cityscapes/leftImg8bit/train"

@@ -7,23 +7,23 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
+  OUTPUT_DIR: &outputdir "output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 
 
 DATASETS:
-  DIR: "../../../../media/atimans/hdd/datasets"
+  DIR: "data"
   DATASET:
-    NAME: "bdd100k_train"
-    IMG_DIR: "bdd100k/images/100k/train"
-    ANN_FILE: "bdd100k/labels/det_train.json"
+    NAME: "bdd100k_val"
+    IMG_DIR: "bdd100k/images/100k/val"
+    ANN_FILE: "bdd100k/labels/det_val.json"
     METADATA_FILE: null
-    FORMAT: "bdd"
+    FORMAT: "coco"
     # set to BGR for coco, RGB for bdd and cityscapes
-    CHANNELS: &channels "RGB"
+    CHANNELS: &channels "BGR"
     # set to true for coco, false for bdd and cityscapes
-    FILTER_EMPTY: false
+    FILTER_EMPTY: true
 
 
 DATALOADER:
@@ -61,7 +61,7 @@ MODEL:
   NAME: "Faster R-CNN X101-FPN"
   ID: "x101fpn"
   LOCAL_CHECKPOINT: true
-  CHECKPOINT_PATH: "checkpoints/x101fpn_train_qr_5k_postprocess/model_0002999.pth"
+  CHECKPOINT_PATH: "checkpoints/x101fpn_train_qr_5k_postprocess.pth"
   FILE: "COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
   DEVICE: &device "cpu"
   # set to false for EnsConf
@@ -111,4 +111,17 @@ MODEL:
       CHECKPOINT_PERIOD: 500
       IMS_PER_BATCH: *batchsize
       MAX_ITER: 5000
+
+
+# BDD100K CLASS FILTERING - CQR CONFIG
+BDD100K_COCO_MAPPING:
+  # All 9 BDD100K categories that actually exist in data
+  VALID_CLASSES: [0, 1, 2, 3, 5, 6, 7, 9, 11]  # person, bicycle, car, motorcycle, bus, train, truck, traffic light, stop sign
+  CLASS_NAMES: ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck", "traffic light", "stop sign"]
+  
+# EVALUATION SETTINGS  
+EVALUATION:
+  # Evaluate on all 9 BDD100K categories with data
+  FILTER_CLASSES: true
+  VALID_CLASS_IDS: [0, 1, 2, 3, 5, 6, 7, 9, 11]
     

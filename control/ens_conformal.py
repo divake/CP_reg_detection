@@ -48,6 +48,14 @@ class EnsConformal(RiskControl):
         self.ens_size = cfg.MODEL.ENSEMBLE.SIZE
         self.ens_weights = cfg.MODEL.ENSEMBLE.WEIGHTS
         self.min_detects = cfg.MODEL.ENSEMBLE.MIN_DETECTS
+        
+        # BDD100K class filtering support
+        if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
+            self.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"Ensemble: Using class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+        else:
+            self.valid_classes = None
+            logger.info("Ensemble: No class filtering applied - using all classes")
         if cfg.MODEL.ENSEMBLE.PARAMS:
             self.ensemble = self._load_param_ensemble(eval=True)
         else:
@@ -94,7 +102,13 @@ class EnsConformal(RiskControl):
                 pred_boxes.append(box_norm.tolist())
                 pred_classes.append(ist.pred_classes.tolist())
                 pred_scores.append(ist.scores.tolist())
-                pred_score_all.append(ist.scores_all.tolist())
+                
+                # CRITICAL FIX: Apply class filtering for BDD100K
+                if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                    scores_all_filtered = ist.scores_all[:, self.valid_classes]
+                    pred_score_all.append(scores_all_filtered.tolist())
+                else:
+                    pred_score_all.append(ist.scores_all.tolist())
 
             # wbf, modified to also return ensemble uncertainty
             boxes, scores, score_all, classes, unc = ensemble_boxes_wbf.weighted_boxes_fusion(
@@ -289,6 +303,13 @@ class EnsConformal(RiskControl):
                             gt_box_tr, pred_box, gt_class_tr, pred_class, pred_score
                         )
 
+                    # CRITICAL FIX: Apply class filtering for BDD100K before matching
+                    # Filter pred_score_all from 80 classes to only valid BDD100K classes
+                    if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                        pred_score_all_filtered = pred_score_all[:, self.valid_classes]
+                    else:
+                        pred_score_all_filtered = pred_score_all
+
                     # Object matching process (predictions to ground truths)
                     (
                         gt_box,
@@ -296,7 +317,7 @@ class EnsConformal(RiskControl):
                         gt_class,
                         pred_class,
                         pred_score,
-                        pred_score_all,
+                        pred_score_all_matched,
                         _,  # pred_logits_all
                         _,  # matches
                     ) = matching.matching(
@@ -305,7 +326,7 @@ class EnsConformal(RiskControl):
                         gt_class_tr,
                         pred_class,
                         pred_score,
-                        pred_score_all,
+                        pred_score_all_filtered,
                         box_matching=self.box_matching,
                         class_match=self.class_matching,
                         thresh=self.iou_thresh,
@@ -320,7 +341,7 @@ class EnsConformal(RiskControl):
                     )
                     pred_boxes[mask, :, m] = pred_box.tensor
                     pred_scores[mask, m] = pred_score
-                    pred_scores_all[mask, :, m] = pred_score_all
+                    pred_scores_all[mask, :, m] = pred_score_all_matched
                     pred_classes[mask, m] = pred_class.to(torch.float)
 
                     del pred, pred_ist

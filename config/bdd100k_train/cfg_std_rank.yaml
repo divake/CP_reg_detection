@@ -1,5 +1,5 @@
 ########################
-### BASE CONFIG FILE ###
+### BDD100K CONFIG FILE ###
 ########################
 
 PROJECT:
@@ -15,9 +15,9 @@ PROJECT:
 DATASETS:
   DIR: "data"
   DATASET:
-    NAME: "bdd100k_train"
-    IMG_DIR: "bdd100k/images/100k/train"
-    ANN_FILE: "bdd100k/labels/det_train.json"
+    NAME: "bdd100k_val"
+    IMG_DIR: "bdd100k/images/100k/val"
+    ANN_FILE: "bdd100k/labels/det_val.json"
     METADATA_FILE: null
     FORMAT: "coco"
     # set to BGR for coco, RGB for bdd and cityscapes
@@ -91,6 +91,7 @@ MODEL:
       DEVICE: *device
       ROI_HEADS:
         NAME: StandardROIHeads
+        # Keep 80 classes but filter predictions to only BDD100K classes
         NUM_CLASSES: 80
         SCORE_THRESH_TEST: 0.5
         NMS_THRESH_TEST: 0.6
@@ -99,4 +100,17 @@ MODEL:
       CHECKPOINT_PERIOD: 500
       IMS_PER_BATCH: *batchsize
       MAX_ITER: 5000
-    
+
+
+# BDD100K CLASS FILTERING - FIXED!
+BDD100K_COCO_MAPPING:
+  # All 9 BDD100K categories that actually exist in data
+  VALID_CLASSES: [0, 1, 2, 3, 5, 6, 7, 9, 11]  # person, bicycle, car, motorcycle, bus, train, truck, traffic light, stop sign
+  CLASS_NAMES: ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck", "traffic light", "stop sign"]
+  
+# EVALUATION SETTINGS  
+EVALUATION:
+  # Evaluate on all 9 BDD100K categories with data
+  FILTER_CLASSES: true
+  VALID_CLASS_IDS: [0, 1, 2, 3, 5, 6, 7, 9, 11]
+  

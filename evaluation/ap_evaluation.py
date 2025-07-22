@@ -362,7 +362,18 @@ class APEvaluator:
         # Add means over class groups
         scores_l.insert(0, ["mean class"] + self.scores.mean(dim=0).tolist())
 
-        samp_bdd = torch.tensor(list(util.get_bdd_as_coco_classes().values()))
+        # CRITICAL FIX: Map BDD100K COCO indices to filtered indices 
+        # Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
+        valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+        
+        # Create mapping from COCO indices to filtered indices
+        if len(self.scores) == len(valid_classes):  # Check if we're dealing with filtered data
+            index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
+            samp_bdd = torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+        else:
+            samp_bdd = torch.tensor(bdd_coco_indices)
+        
         scores_l.insert(
             1, ["mean class (bdd100k)"] + self.scores[samp_bdd].mean(dim=0).tolist()
         )
