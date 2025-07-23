@@ -100,7 +100,7 @@ def main():
     parser.add_argument(
         '--datasets',
         nargs='+',
-        default=['coco', 'cityscapes', 'bdd100k'],
+        default=['coco'],
         choices=['coco', 'cityscapes', 'bdd100k'],
         help='Datasets to generate commands for'
     )

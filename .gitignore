@@ -258,3 +258,7 @@ cache_generation_results_20250719_063835.txt
 gtFine_trainvaltest.zip
 leftImg8bit_trainvaltest.zip
 checkpoints*
+learnable_scoring_fn/commands_next.txt
+learnable_scoring_fn/commands_next_plus.txt
+learnable_scoring_fn/commands_plus.txt
+cache_commands*.txt

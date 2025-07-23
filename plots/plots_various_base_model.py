@@ -106,6 +106,16 @@ BASE_MODEL_CONFIGS = {
         'model_name': 'ResNeXt-101-FPN (Ensemble Cityscapes)',
         'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/ens_conf_x101fpn_ens_rank_cityscapes',
         'data_file': 'ens_conf_x101fpn_ens_rank_cityscapes_box_set.pt'
+    },
+    'cascade_r50fpn': {
+        'model_name': 'Cascade R-CNN ResNet-50-FPN',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_cascade_r50fpn_std_rank_class',
+        'data_file': 'std_conf_cascade_r50fpn_std_rank_class_box_set.pt'
+    },
+    'x101fpn_int8_aggressive': {
+        'model_name': 'ResNeXt-101-FPN (INT8 Aggressive)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_aggressive_std_rank_class',
+        'data_file': 'std_conf_x101fpn_int8_aggressive_std_rank_class_box_set.pt'
     }
 }
 
@@ -180,6 +190,11 @@ def load_model_performance(model_id, config):
         coverage_data = np.array(coverage_trials)
         mpiw_data = np.array(mpiw_trials)
         
+        # Check if we have valid data
+        if len(coverage_data) == 0 or len(mpiw_data) == 0:
+            print(f"  ⚠️  No valid data found (all zeros or empty)")
+            return None
+            
         return {
             'coverage_mean': coverage_data.mean(),
             'coverage_std': coverage_data.std(),

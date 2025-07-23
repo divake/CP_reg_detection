@@ -69,15 +69,25 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Add the parent directory and detectron2 to sys.path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent / "detectron2"))
+# Get the absolute path to the conformal-od directory
+conformal_od_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(conformal_od_dir))
+
+# Add detectron2 to path
+detectron2_path = conformal_od_dir / "detectron2"
+if detectron2_path.exists():
+    sys.path.insert(0, str(detectron2_path))
+    print(f"Added detectron2 from: {detectron2_path}")
+else:
+    print(f"WARNING: detectron2 directory not found at {detectron2_path}")
+    print("Please ensure detectron2 is available in the conformal-od directory")
 
 # ================================================================================
 # CONFIGURATION SECTION - Just specify the model name!
 # ================================================================================
 
-# Model Selection - Just change this to the model you want to use
-MODEL_NAME = "x101fpn"  # Available options: "x101fpn", "r50fpn", "r50c4", "r50dc5", "r101fpn", "r101c4", "r101dc5", "retinanet_r50", "retinanet_r101", "cascade_r50", "cascade_x152", "rpn_r50", "fast_rcnn_r50"
+# Model Selection - Must be specified via --model argument
+MODEL_NAME = None  # No default model - must be specified via command line
 
 # ================================================================================
 # MODEL REGISTRY - Add new models here
@@ -175,18 +185,14 @@ MODEL_REGISTRY = {
 
 # Base paths - these are automatically combined with model-specific files
 BASE_DIR = "/ssd_4TB/divake/conformal-od"
-CHECKPOINTS_DIR = f"{BASE_DIR}/checkpoints"
+CHECKPOINTS_DIR = f"{BASE_DIR}/checkpoints_variants"
 CONFIG_DIR = f"{BASE_DIR}/config/coco_val"
 CACHE_BASE_DIR = f"{BASE_DIR}/learnable_scoring_fn"
 
-# Auto-generated paths based on selected model
-if MODEL_NAME not in MODEL_REGISTRY:
-    raise ValueError(f"Unknown model: {MODEL_NAME}. Available models: {list(MODEL_REGISTRY.keys())}")
-
-model_config = MODEL_REGISTRY[MODEL_NAME]
-CHECKPOINT_PATH = f"{CHECKPOINTS_DIR}/{model_config['checkpoint_file']}"
-CONFIG_PATH = f"{CONFIG_DIR}/{model_config['config_file']}"
-OUTPUT_DIR = f"{CACHE_BASE_DIR}/{model_config['cache_dir']}"
+# Auto-generated paths will be set in main() after parsing arguments
+CHECKPOINT_PATH = None
+CONFIG_PATH = None  
+OUTPUT_DIR = None
 
 # Dataset Configuration
 COCO_DIR = "/ssd_4TB/divake/conformal-od/data/coco"  # Path to COCO dataset
@@ -1003,9 +1009,16 @@ Examples:
     parser.add_argument(
         "--model", 
         type=str, 
-        default=MODEL_NAME,
-        choices=list(MODEL_REGISTRY.keys()),
-        help=f"Model to use. Available: {list(MODEL_REGISTRY.keys())} (default: {MODEL_NAME})"
+        required=True,
+        help=f"Model to use (REQUIRED). Can be a short name from registry ({list(MODEL_REGISTRY.keys())}) or full checkpoint filename (without .pkl extension)"
+    )
+    
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        required=True,
+        choices=["coco", "cityscapes", "bdd100k"],
+        help="Dataset to use for cache generation (REQUIRED)"
     )
     
     parser.add_argument(
@@ -1071,7 +1084,7 @@ def main():
         return 0
     
     # Update global configuration with command line arguments
-    global MODEL_NAME, CHECKPOINT_PATH, CONFIG_PATH, OUTPUT_DIR
+    global MODEL_NAME, CHECKPOINT_PATH, CONFIG_PATH, OUTPUT_DIR, COCO_DIR
     global MAX_TRAIN_IMAGES, MAX_VAL_IMAGES, CONFIDENCE_THRESHOLD, IOU_THRESHOLD, DEVICE
     
     MODEL_NAME = args.model
@@ -1080,6 +1093,15 @@ def main():
     CONFIDENCE_THRESHOLD = args.confidence_threshold
     IOU_THRESHOLD = args.iou_threshold
     DEVICE = args.device
+    
+    # Set dataset directory based on dataset argument
+    dataset_dirs = {
+        "coco": "/ssd_4TB/divake/conformal-od/data/coco",
+        "cityscapes": "/ssd_4TB/divake/conformal-od/data/cityscapes",
+        "bdd100k": "/ssd_4TB/divake/conformal-od/data/bdd100k"
+    }
+    COCO_DIR = dataset_dirs[args.dataset]
+    dataset_name = args.dataset
     
     # Handle GPU device selection
     if args.gpu is not None:
@@ -1096,10 +1118,22 @@ def main():
             DEVICE = "cpu"
     
     # Update paths based on selected model
-    model_config = MODEL_REGISTRY[MODEL_NAME]
-    CHECKPOINT_PATH = f"{CHECKPOINTS_DIR}/{model_config['checkpoint_file']}"
-    CONFIG_PATH = f"{CONFIG_DIR}/{model_config['config_file']}"
-    OUTPUT_DIR = f"{CACHE_BASE_DIR}/{model_config['cache_dir']}"
+    if MODEL_NAME in MODEL_REGISTRY:
+        # Use registry entry
+        model_config = MODEL_REGISTRY[MODEL_NAME]
+        CHECKPOINT_PATH = f"{CHECKPOINTS_DIR}/{model_config['checkpoint_file']}"
+        CONFIG_PATH = f"{CONFIG_DIR}/{model_config['config_file']}"
+        OUTPUT_DIR = f"{CACHE_BASE_DIR}/{model_config['cache_dir']}"
+        model_description = model_config['description']
+    else:
+        # Assume it's a full checkpoint filename (without .pkl extension)
+        checkpoint_file = f"{MODEL_NAME}.pkl"
+        CHECKPOINT_PATH = f"{CHECKPOINTS_DIR}/{checkpoint_file}"
+        CONFIG_PATH = None  # Will use auto-detection
+        # Create cache directory name from model name
+        cache_dir_name = f"cache_{dataset_name}/cache_base_model_{MODEL_NAME.replace('-', '_')}"
+        OUTPUT_DIR = f"{CACHE_BASE_DIR}/{cache_dir_name}"
+        model_description = f"Model from checkpoint: {checkpoint_file}"
     
     print("="*80)
     print("DETECTRON2 CACHE GENERATION")
@@ -1109,7 +1143,7 @@ def main():
     # Display selected model information
     print("Selected Model Configuration:")
     print(f"  Model Name: {MODEL_NAME}")
-    print(f"  Description: {MODEL_REGISTRY[MODEL_NAME]['description']}")
+    print(f"  Description: {model_description}")
     print(f"  Checkpoint: {CHECKPOINT_PATH}")
     print(f"  Config: Standard Detectron2 model zoo config (auto-determined)")
     print(f"  Output Directory: {OUTPUT_DIR}")
@@ -1117,7 +1151,8 @@ def main():
     
     # Display other configuration
     print("Other Configuration:")
-    print(f"  COCO Directory: {COCO_DIR}")
+    print(f"  Dataset: {dataset_name}")
+    print(f"  Data Directory: {COCO_DIR}")
     print(f"  Max Train Images: {MAX_TRAIN_IMAGES or 'All'}")
     print(f"  Max Val Images: {MAX_VAL_IMAGES or 'All'}")
     print(f"  Confidence Threshold: {CONFIDENCE_THRESHOLD}")

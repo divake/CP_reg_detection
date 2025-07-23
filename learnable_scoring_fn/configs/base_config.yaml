@@ -21,14 +21,14 @@ model:
   # Structure: cache_dirs[dataset][model] = cache_directory_path
   cache_dirs:
     coco:
-      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50
-      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101
-      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101
-      # Add more COCO models as needed:
-      # cascade_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_cascade_r50fpn
-      # cascade_r101fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_cascade_r101fpn
-      # fcos_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_fcos_r50fpn
-      # retinanet_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_retinanet_r50fpn
+      cascade_r_50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_Cascade_R_50
+      r_101_c4: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_R_101_C4
+      r_101_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_R_101_FPN
+      r_50_c4: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_R_50_C4
+      r_50_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_R_50_FPN
+      retinanet_r_101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_RetinaNet_R_101
+      retinanet_r_50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_RetinaNet_R_50
+      x_101_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_X_101_FPN
     
     cityscapes:
       resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50_cityscapes

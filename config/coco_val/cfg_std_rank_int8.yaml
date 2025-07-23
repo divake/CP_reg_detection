@@ -26,7 +26,7 @@ DATASETS:
 MODEL:
   AP_EVAL: false
   BOX_MATCHING: box
-  CHECKPOINT_PATH: /ssd_4TB/divake/conformal-od/checkpoints_variants/faster_rcnn_X_101_32x8d_FPN_3x_int8.pkl
+  CHECKPOINT_PATH: /ssd_4TB/divake/conformal-od/checkpoints_variants/faster_rcnn_X_101_32x8d_FPN_3x_int8_aggressive_fixed.pkl
   CLASS_MATCHING: false
   CONFIG:
     DATALOADER:
@@ -69,10 +69,10 @@ MODEL:
       MAX_ITER: 5000
   DEVICE: cuda
   FILE: /ssd_4TB/divake/conformal-od/detectron2/configs/COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml
-  ID: x101fpn_int8
+  ID: x101fpn_int8_aggressive
   IOU_THRESH_TEST: 0.5
   LOCAL_CHECKPOINT: true
-  NAME: Faster R-CNN X101-FPN INT8
+  NAME: Faster R-CNN X101-FPN INT8 Aggressive (Fixed)
 PROJECT:
   CHECKPOINT_DIR: checkpoints
   CODE_DIR: conformalbb
