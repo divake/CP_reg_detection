@@ -53,7 +53,16 @@ class LabelSet:
     ):
         self.img_list = img_list
         self.ist_list = ist_list
-        self.nr_class = nr_class
+        
+        # Store both original and filtered class counts
+        self.original_nr_class = nr_class  # Always 80 for data structures
+        if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+            self.filtered_nr_class = len(self.valid_classes)  # 7 for Cityscapes, 9 for BDD100K
+            self.logger.info(f"Using {self.filtered_nr_class} filtered classes for label set tensors")
+        else:
+            self.filtered_nr_class = nr_class  # Same as original for COCO
+        
+        self.nr_class = self.original_nr_class  # Use original for data structures
         self.nr_metrics = nr_metrics + 4  # 4 slots for strat by misclassif.
         self.nr_label_metrics = 15
         self.nr_scores = nr_scores
@@ -81,7 +90,23 @@ class LabelSet:
         # replace empty sets with singleton set of highest probability class
         indices = (label_sets.sum(dim=1) == 0).nonzero(as_tuple=True)[0]
         if indices.numel() != 0:
-            top_label = pred_score_all[indices].argmax(dim=1)
+            # CRITICAL FIX: Handle class filtering for null set replacement
+            if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                # Check if pred_score_all is already filtered or still has all classes
+                if pred_score_all.shape[1] == len(self.valid_classes):
+                    # pred_score_all is already filtered, use directly
+                    top_label = pred_score_all[indices].argmax(dim=1)
+                elif pred_score_all.shape[1] == 80:  # Original COCO classes
+                    # Filter pred_score_all to valid classes first
+                    pred_score_filtered = pred_score_all[indices][:, self.valid_classes]
+                    top_label = pred_score_filtered.argmax(dim=1)
+                else:
+                    # Unexpected shape, fallback to using first valid class
+                    top_label = torch.zeros(indices.size(0), dtype=torch.long)
+            else:
+                # No class filtering, use original behavior
+                top_label = pred_score_all[indices].argmax(dim=1)
+            
             label_sets[indices, top_label] = 1
             # label_sets[indices, :] = 1  # alternative: replace with full set
         return label_sets
@@ -97,7 +122,7 @@ class LabelSet:
 
         if self.save_label_set:
             label_sets = torch.zeros(
-                size=(self.calib_trials, sum(self.nr_ists), self.nr_class)
+                size=(self.calib_trials, sum(self.nr_ists), self.filtered_nr_class)
             ).to(torch.bool)
         else:
             label_sets = torch.tensor([])
@@ -133,13 +158,44 @@ class LabelSet:
                 # compute label set metrics
                 nr_calib_samp = calib_mask.sum()
                 mean_set_size = metrics.mean_label_set_size(label_set[~calib_mask])
-                cov_set = metrics.label_coverage(label_set[~calib_mask], c)
-                (
-                    cov_set_area,
-                    cov_set_iou,
-                    cov_set_cl,
-                    mask_cl,
-                ) = metrics.label_stratified_coverage(label_set, c, calib_mask, ist)
+                
+                # CRITICAL FIX: Map original class index to filtered index for coverage calculation
+                if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                    # Map original COCO class index to filtered index
+                    if c in self.valid_classes:
+                        filtered_class_idx = self.valid_classes.index(c)
+                        cov_set = metrics.label_coverage(label_set[~calib_mask], filtered_class_idx)
+                    else:
+                        # Class not in valid classes, skip coverage calculation
+                        cov_set = torch.tensor(0.0)
+                else:
+                    # No class filtering, use original index
+                    cov_set = metrics.label_coverage(label_set[~calib_mask], c)
+                # CRITICAL FIX: Map original class index for stratified coverage too
+                if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                    # Map original COCO class index to filtered index
+                    if c in self.valid_classes:
+                        filtered_class_idx = self.valid_classes.index(c)
+                        (
+                            cov_set_area,
+                            cov_set_iou,
+                            cov_set_cl,
+                            mask_cl,
+                        ) = metrics.label_stratified_coverage(label_set, filtered_class_idx, calib_mask, ist)
+                    else:
+                        # Class not in valid classes, set default values
+                        cov_set_area = torch.zeros(5)  # Default size bins
+                        cov_set_iou = torch.zeros(3)   # Default IoU bins
+                        cov_set_cl = torch.zeros(2)    # Default class bins
+                        mask_cl = torch.zeros(label_set.size(0), dtype=torch.bool)
+                else:
+                    # No class filtering, use original index
+                    (
+                        cov_set_area,
+                        cov_set_iou,
+                        cov_set_cl,
+                        mask_cl,
+                    ) = metrics.label_stratified_coverage(label_set, c, calib_mask, ist)
                 mean_set_size_cl = metrics.mean_label_set_size(label_set[mask_cl])
                 mean_set_size_miscl = metrics.mean_label_set_size(label_set[~mask_cl])
 
@@ -160,9 +216,16 @@ class LabelSet:
                 )
 
                 # label set-based box quantile selection strategy
+                # CRITICAL FIX: Filter box_quantiles to match filtered label_set dimensions
+                if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                    # Filter box_quantiles to only valid classes to match label_set
+                    filtered_box_quantiles = self.box_quantiles[t][self.valid_classes]
+                else:
+                    filtered_box_quantiles = self.box_quantiles[t]
+                
                 box_set_quant, _ = box_set_strategy(
                     label_set,
-                    self.box_quantiles[t],
+                    filtered_box_quantiles,
                     self.box_set_strategy,
                 )
 
@@ -371,10 +434,13 @@ class ClassThresholdSet(LabelSet):
 
     def __init__(self, cfg, args, logger):
         super().__init__(cfg, args, logger)
-        # Get valid classes for class filtering (BDD100K support)
+        # Get valid classes for class filtering (BDD100K and Cityscapes support)
         if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
             self.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
-            logger.info(f"Using class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+            logger.info(f"Using BDD100K class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+        elif hasattr(cfg, 'CITYSCAPES_COCO_MAPPING') and 'VALID_CLASSES' in cfg.CITYSCAPES_COCO_MAPPING:
+            self.valid_classes = cfg.CITYSCAPES_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"Using Cityscapes class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
         else:
             self.valid_classes = None
             logger.info("No class filtering applied - using all classes")
@@ -391,7 +457,7 @@ class ClassThresholdSet(LabelSet):
     def get_pred_set(self, pred_score_all: torch.Tensor, q=None):
         label_q = self.label_q if q is None else q
         
-        # CRITICAL FIX: Handle class filtering for BDD100K
+        # CRITICAL FIX: Handle class filtering for BDD100K and Cityscapes
         if self.valid_classes is not None and pred_score_all.dim() == 2:
             # Check if data is already filtered by comparing tensor size with valid classes
             if pred_score_all.shape[1] == len(self.valid_classes):
@@ -399,10 +465,19 @@ class ClassThresholdSet(LabelSet):
                 return (pred_score_all >= 1 - label_q).int()
             elif pred_score_all.shape[1] == 80:  # Original COCO classes
                 # Filter predictions to only valid classes
-                # pred_score_all: [N, 80] -> [N, 9] for BDD100K
+                # pred_score_all: [N, 80] -> [N, 9] for BDD100K or [N, 7] for Cityscapes
                 pred_score_filtered = pred_score_all[:, self.valid_classes]
+                
+                # CRITICAL FIX: Also filter label_q to match filtered predictions
+                if hasattr(label_q, 'shape') and len(label_q.shape) > 0 and label_q.shape[-1] == 80:
+                    # Filter label_q to match valid classes: [80] -> [9] for BDD100K or [7] for Cityscapes
+                    label_q_filtered = label_q[..., self.valid_classes]
+                else:
+                    # label_q is scalar or already compatible
+                    label_q_filtered = label_q
+                
                 # get label sets via (class-conditional) thresholding on filtered predictions
-                return (pred_score_filtered >= 1 - label_q).int()
+                return (pred_score_filtered >= 1 - label_q_filtered).int()
             else:
                 # Unexpected tensor size, use as-is
                 return (pred_score_all >= 1 - label_q).int()

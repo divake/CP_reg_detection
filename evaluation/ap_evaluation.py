@@ -362,25 +362,38 @@ class APEvaluator:
         # Add means over class groups
         scores_l.insert(0, ["mean class"] + self.scores.mean(dim=0).tolist())
 
-        # CRITICAL FIX: Map BDD100K COCO indices to filtered indices 
-        # Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
-        bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
-        valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+        # CRITICAL FIX: Map dataset COCO indices to filtered indices for BDD100K and Cityscapes
+        # Auto-detect dataset based on score tensor size
+        if len(self.scores) == 9:
+            # BDD100K: Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+            dataset_coco_indices = list(util.get_bdd_as_coco_classes().values())
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]
+            dataset_label = "bdd100k"
+        elif len(self.scores) == 7:
+            # Cityscapes: Original COCO indices: [0, 1, 2, 3, 5, 6, 7] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6]
+            dataset_coco_indices = list(util.get_cityscapes_as_coco_classes().values())
+            valid_classes = [0, 1, 2, 3, 5, 6, 7]
+            dataset_label = "cityscapes"
+        else:
+            # Fallback for other datasets
+            dataset_coco_indices = list(util.get_bdd_as_coco_classes().values())
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]
+            dataset_label = "dataset"
         
         # Create mapping from COCO indices to filtered indices
         if len(self.scores) == len(valid_classes):  # Check if we're dealing with filtered data
             index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
-            samp_bdd = torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+            samp_dataset = torch.tensor([index_mapping[idx] for idx in dataset_coco_indices if idx in index_mapping])
         else:
-            samp_bdd = torch.tensor(bdd_coco_indices)
+            samp_dataset = torch.tensor(dataset_coco_indices)
         
         scores_l.insert(
-            1, ["mean class (bdd100k)"] + self.scores[samp_bdd].mean(dim=0).tolist()
+            1, [f"mean class ({dataset_label})"] + self.scores[samp_dataset].mean(dim=0).tolist()
         )
         scores_l.insert(
             2,
-            ["mean class (bdd100k - stop sign)"]
-            + self.scores[samp_bdd[:-1]].mean(dim=0).tolist(),
+            [f"mean class ({dataset_label} - stop sign)"]
+            + self.scores[samp_dataset[:-1]].mean(dim=0).tolist(),
         )
 
         samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))

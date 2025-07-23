@@ -7,7 +7,7 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
+  OUTPUT_DIR: &outputdir "output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 
@@ -15,15 +15,15 @@ PROJECT:
 DATASETS:
   DIR: "data"
   DATASET:
-    NAME: "cityscapes"
-    IMG_DIR: "cityscapes/leftImg8bit/train"
-    ANN_FILE: "cityscapes/gtFine/train"
+    NAME: "cityscapes_val"
+    IMG_DIR: "cityscapes/leftImg8bit/val"
+    ANN_FILE: "cityscapes/gtFine/val"
     METADATA_FILE: null
     FORMAT: "cityscapes"
     # set to BGR for coco, RGB for bdd and cityscapes
     CHANNELS: &channels "RGB"
     # set to true for coco, false for bdd and cityscapes
-    FILTER_EMPTY: false
+    FILTER_EMPTY: true
 
 
 DATALOADER:
@@ -57,11 +57,24 @@ QUANTILE_REGRESSION:
   - 2
 
 
+# CITYSCAPES CLASS FILTERING - CQR CONFIG
+CITYSCAPES_COCO_MAPPING:
+  # All 7 Cityscapes categories that actually exist in data
+  VALID_CLASSES: [0, 1, 2, 3, 5, 6, 7]  # person, bicycle, car, motorcycle, bus, train, truck
+  CLASS_NAMES: ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
+  
+# EVALUATION SETTINGS  
+EVALUATION:
+  # Evaluate on all 7 Cityscapes categories with data
+  FILTER_CLASSES: true
+  VALID_CLASS_IDS: [0, 1, 2, 3, 5, 6, 7]
+
+
 MODEL:
   NAME: "Faster R-CNN X101-FPN"
   ID: "x101fpn"
   LOCAL_CHECKPOINT: true
-  CHECKPOINT_PATH: "checkpoints/x101fpn_train_qr_5k_postprocess/model_0002999.pth"
+  CHECKPOINT_PATH: "checkpoints/x101fpn_train_qr_5k_postprocess.pth"
   FILE: "COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml"
   DEVICE: &device "cpu"
   # set to false for EnsConf

@@ -4,8 +4,8 @@
 """
 Various Base Model Performance Analysis Script
 
-This script analyzes coverage and MPIW performance across 5 different base models
-using standard conformal prediction method.
+This script analyzes coverage and MPIW performance across 12 different base models
+using standard conformal prediction, CQR, and ensemble methods.
 
 Base Models Analyzed:
 1. ResNet-50-C4 (No FPN)
@@ -13,6 +13,13 @@ Base Models Analyzed:
 3. ResNet-101-C4 (No FPN)
 4. ResNet-101-FPN
 5. ResNeXt-101-FPN
+6. ResNeXt-101-FPN (BDD100K)
+7. ResNeXt-101-FPN (FP16)
+8. ResNeXt-101-FPN (INT8)
+9. ResNeXt-101-FPN (FP16 Aggressive)
+10. ResNeXt-101-FPN (CQR BDD100K)
+11. ResNeXt-101-FPN (Ensemble BDD100K)
+12. ResNeXt-101-FPN (Cityscapes)
 
 Output: Simple coverage and MPIW statistics for each base model
 """
@@ -52,6 +59,41 @@ BASE_MODEL_CONFIGS = {
         'model_name': 'ResNeXt-101-FPN',
         'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_std_rank_class',
         'data_file': 'std_conf_x101fpn_std_rank_class_box_set.pt'
+    },
+    'x101fpn_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k',
+        'data_file': 'std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k_box_set.pt'
+    },
+    'x101fpn_fp16': {
+        'model_name': 'ResNeXt-101-FPN (FP16)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_std_rank_class_fp16',
+        'data_file': 'std_conf_x101fpn_fp16_std_rank_class_fp16_box_set.pt'
+    },
+    'x101fpn_int8': {
+        'model_name': 'ResNeXt-101-FPN (INT8)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_std_rank_class_int8',
+        'data_file': 'std_conf_x101fpn_int8_std_rank_class_int8_box_set.pt'
+    },
+    'x101fpn_fp16_aggressive': {
+        'model_name': 'ResNeXt-101-FPN (FP16 Aggressive)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive',
+        'data_file': 'std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive_box_set.pt'
+    },
+    'x101fpn_cqr_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (CQR BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_bdd100k',
+        'data_file': 'cqr_conf_x101fpn_cqr_rank_bdd100k_box_set.pt'
+    },
+    'x101fpn_ens_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (Ensemble BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/ens_conf_x101fpn_ens_rank_bdd100k',
+        'data_file': 'ens_conf_x101fpn_ens_rank_bdd100k_box_set.pt'
+    },
+    'x101fpn_cityscapes': {
+        'model_name': 'ResNeXt-101-FPN (Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_x101fpn_std_rank_class_cityscapes',
+        'data_file': 'std_conf_x101fpn_std_rank_class_cityscapes_box_set.pt'
     }
 }
 
@@ -87,13 +129,44 @@ def load_model_performance(model_id, config):
         # Shape: [n_trials, n_classes, n_score_indices, n_metrics]
         control_data = torch.load(file_path, map_location='cpu', weights_only=False)
         
-        # Extract metrics - average over classes and score indices for each trial
-        coverage_all = control_data[:, :, :, METRIC_INDICES['cov_box']].mean(dim=(1,2))
-        mpiw_all = control_data[:, :, 0, METRIC_INDICES['mpiw']].mean(dim=1)  # Use first score index only
+        # Determine dataset type and valid classes
+        if 'cityscapes' in model_id.lower():
+            # Cityscapes only has 7 classes: person(0), bicycle(1), car(2), motorcycle(3), bus(5), train(6), truck(7)
+            valid_classes = [0, 1, 2, 3, 5, 6, 7]
+            dataset_type = 'cityscapes'
+        elif 'bdd100k' in model_id.lower():
+            # BDD100K has 9 classes: person(0), rider(0), car(2), truck(7), bus(5), train(6), motorcycle(3), bicycle(1), traffic light(9)
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9]  # Missing class 4 and 8
+            dataset_type = 'bdd100k'
+        else:
+            # COCO has all 80 classes
+            valid_classes = list(range(control_data.shape[1]))
+            dataset_type = 'coco'
         
-        # Convert to numpy
-        coverage_data = coverage_all.cpu().numpy()
-        mpiw_data = mpiw_all.cpu().numpy()
+        # Extract metrics - average only over valid classes
+        coverage_by_class = control_data[:, :, :, METRIC_INDICES['cov_box']].mean(dim=2)  # Average over score indices
+        mpiw_by_class = control_data[:, :, 0, METRIC_INDICES['mpiw']]  # Use first score index only
+        
+        # For each trial, compute mean only over valid classes
+        coverage_trials = []
+        mpiw_trials = []
+        
+        for trial_idx in range(control_data.shape[0]):
+            # Get coverage for valid classes only
+            valid_coverages = [coverage_by_class[trial_idx, cls].item() for cls in valid_classes if cls < control_data.shape[1]]
+            valid_mpiws = [mpiw_by_class[trial_idx, cls].item() for cls in valid_classes if cls < control_data.shape[1]]
+            
+            # Compute mean only over valid (non-zero) values
+            valid_coverages = [c for c in valid_coverages if c > 0]  # Filter out zero coverages
+            valid_mpiws = [m for m in valid_mpiws if m > 0]  # Filter out zero MPIWs
+            
+            if valid_coverages:
+                coverage_trials.append(np.mean(valid_coverages))
+            if valid_mpiws:
+                mpiw_trials.append(np.mean(valid_mpiws))
+        
+        coverage_data = np.array(coverage_trials)
+        mpiw_data = np.array(mpiw_trials)
         
         return {
             'coverage_mean': coverage_data.mean(),
@@ -105,7 +178,8 @@ def load_model_performance(model_id, config):
             'mpiw_min': mpiw_data.min(),
             'mpiw_max': mpiw_data.max(),
             'n_trials': control_data.shape[0],
-            'n_classes': control_data.shape[1]
+            'n_classes': len(valid_classes),
+            'dataset_type': dataset_type
         }
         
     except Exception as e:
@@ -122,9 +196,9 @@ def analyze_all_models():
     print("=" * 80)
     print("VARIOUS BASE MODEL PERFORMANCE ANALYSIS")
     print("=" * 80)
-    print("Analyzing coverage and MPIW for 5 different base models")
-    print("Method: Standard Conformal Prediction (std_conf)")
-    print("Dataset: COCO validation set")
+    print("Analyzing coverage and MPIW for 12 different base models")
+    print("Methods: Standard Conformal Prediction (std_conf), CQR (cqr_conf), and Ensemble (ens_conf)")
+    print("Datasets: COCO validation set, BDD100K validation set, Cityscapes validation set")
     print()
     
     results = {}
@@ -201,6 +275,8 @@ def print_performance_summary(results):
               f"(range: {perf['mpiw_min']:.1f} - {perf['mpiw_max']:.1f})")
         print(f"  Trials:   {perf['n_trials']} calibration trials")
         print(f"  Classes:  {perf['n_classes']} object classes")
+        if 'dataset_type' in perf:
+            print(f"  Dataset:  {perf['dataset_type'].upper()}")
 
 def find_best_models(results):
     """
@@ -279,7 +355,7 @@ def main():
     print("• Lower MPIW = tighter prediction intervals (better)")
     print("• Coverage should be close to 90% (target)")
     print("• All models use standard conformal prediction method")
-    print("• Results based on COCO validation set")
+    print("• Results based on COCO and BDD100K validation sets")
     print("=" * 80)
 
 if __name__ == "__main__":

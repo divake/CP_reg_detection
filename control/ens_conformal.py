@@ -27,7 +27,13 @@ class EnsConformal(RiskControl):
     """
     def __init__(self, cfg, args, nr_class, filedir, log, logger):
         self.seed = cfg.PROJECT.SEED
-        self.nr_class = nr_class
+        # Adjust nr_class for class filtering (BDD100K=9, Cityscapes=7, default=80)
+        if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
+            self.nr_class = len(cfg.BDD100K_COCO_MAPPING.VALID_CLASSES)  # 9 for BDD100K
+        elif hasattr(cfg, 'CITYSCAPES_COCO_MAPPING') and 'VALID_CLASSES' in cfg.CITYSCAPES_COCO_MAPPING:
+            self.nr_class = len(cfg.CITYSCAPES_COCO_MAPPING.VALID_CLASSES)  # 7 for Cityscapes
+        else:
+            self.nr_class = nr_class  # 80 for full COCO
         self.filedir = filedir
         self.log = log
         self.logger = logger
@@ -49,13 +55,19 @@ class EnsConformal(RiskControl):
         self.ens_weights = cfg.MODEL.ENSEMBLE.WEIGHTS
         self.min_detects = cfg.MODEL.ENSEMBLE.MIN_DETECTS
         
-        # BDD100K class filtering support
+        # BDD100K and Cityscapes class filtering support
         if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
             self.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
-            logger.info(f"Ensemble: Using class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+            logger.info(f"Ensemble: Using BDD100K class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
+        elif hasattr(cfg, 'CITYSCAPES_COCO_MAPPING') and 'VALID_CLASSES' in cfg.CITYSCAPES_COCO_MAPPING:
+            self.valid_classes = cfg.CITYSCAPES_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"Ensemble: Using Cityscapes class filtering for {len(self.valid_classes)} valid classes: {self.valid_classes}")
         else:
             self.valid_classes = None
             logger.info("Ensemble: No class filtering applied - using all classes")
+        
+        # Log the number of classes used for tensor initialization
+        logger.info(f"Ensemble: Initializing tensors for {self.nr_class} classes")
         if cfg.MODEL.ENSEMBLE.PARAMS:
             self.ensemble = self._load_param_ensemble(eval=True)
         else:

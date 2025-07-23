@@ -7,7 +7,7 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output_90_99"
+  OUTPUT_DIR: &outputdir "output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 

@@ -18,21 +18,37 @@ import torch
 from util import util
 
 
-def get_bdd_sample_indices(data):
-    """Helper function to get properly mapped BDD100K indices for evaluation.
+def get_dataset_sample_indices(data, dataset_name="auto"):
+    """Helper function to get properly mapped dataset indices for evaluation.
     
-    This fixes the IndexError when using filtered class predictions with BDD100K.
-    Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    This fixes the IndexError when using filtered class predictions with BDD100K or Cityscapes.
+    Automatically detects dataset based on data size or uses explicit dataset_name.
     """
-    bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
-    valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+    # Try to detect dataset based on data size
+    if dataset_name == "auto":
+        if len(data) == 9:
+            dataset_name = "bdd100k"
+        elif len(data) == 7:
+            dataset_name = "cityscapes"
+        else:
+            # Fallback to BDD100K for compatibility
+            dataset_name = "bdd100k"
+    
+    if dataset_name == "bdd100k":
+        dataset_coco_indices = list(util.get_bdd_as_coco_classes().values())
+        valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+    elif dataset_name == "cityscapes":
+        dataset_coco_indices = list(util.get_cityscapes_as_coco_classes().values())
+        valid_classes = [0, 1, 2, 3, 5, 6, 7]  # From Cityscapes config
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
     
     # Create mapping from COCO indices to filtered indices
     if len(data) == len(valid_classes):  # Check if we're dealing with filtered data
         index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
-        return torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+        return torch.tensor([index_mapping[idx] for idx in dataset_coco_indices if idx in index_mapping])
     else:
-        return torch.tensor(bdd_coco_indices)
+        return torch.tensor(dataset_coco_indices)
 
 
 _default_metrics = [
@@ -209,19 +225,25 @@ def get_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    # CRITICAL FIX: Map BDD100K COCO indices to filtered indices 
-    # Original COCO indices: [0, 1, 2, 3, 5, 6, 7, 9, 11] -> Filtered indices: [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    bdd_coco_indices = list(util.get_bdd_as_coco_classes().values())
-    valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # From BDD100K config
+    # CRITICAL FIX: For Cityscapes/BDD100K, only compute mean over classes with actual data
+    # Filter to classes with non-zero calibration samples
+    samp_nonzero = torch.where(nr_calib_samp > 0)[0]
     
-    # Create mapping from COCO indices to filtered indices
-    if len(data) == len(valid_classes):  # Check if we're dealing with filtered data
-        index_mapping = {coco_idx: filtered_idx for filtered_idx, coco_idx in enumerate(valid_classes)}
-        samp_bdd = torch.tensor([index_mapping[idx] for idx in bdd_coco_indices if idx in index_mapping])
+    # Determine dataset name and appropriate class filtering
+    if len(samp_nonzero) == 7:  # Cityscapes case
+        dataset_label = "cityscapes"
+        # For Cityscapes, use only the classes that have data
+        samp_dataset = samp_nonzero
+    elif len(samp_nonzero) == 9:  # BDD100K case
+        dataset_label = "bdd100k" 
+        # For BDD100K, use only the classes that have data
+        samp_dataset = samp_nonzero
     else:
-        samp_bdd = torch.tensor(bdd_coco_indices)
+        # Fallback: use the old method for other datasets
+        samp_dataset = get_dataset_sample_indices(data)
+        dataset_label = "dataset"
     
-    data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
+    data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
     data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
@@ -313,8 +335,25 @@ def get_box_set_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    samp_bdd = get_bdd_sample_indices(data)
-    data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
+    # CRITICAL FIX: For Cityscapes/BDD100K, only compute mean over classes with actual data
+    # Filter to classes with non-zero calibration samples
+    samp_nonzero = torch.where(nr_calib_samp > 0)[0]
+    
+    # Determine dataset name and appropriate class filtering
+    if len(samp_nonzero) == 7:  # Cityscapes case
+        dataset_label = "cityscapes"
+        # For Cityscapes, use only the classes that have data
+        samp_dataset = samp_nonzero
+    elif len(samp_nonzero) == 9:  # BDD100K case
+        dataset_label = "bdd100k" 
+        # For BDD100K, use only the classes that have data
+        samp_dataset = samp_nonzero
+    else:
+        # Fallback: use the old method for other datasets
+        samp_dataset = get_dataset_sample_indices(data)
+        dataset_label = "dataset"
+    
+    data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
     data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
@@ -365,8 +404,25 @@ def get_label_results_table(
         2, ["mean class (nr calib >= 1000)"] + data[samp_gt1000].mean(dim=0).tolist()
     )
 
-    samp_bdd = get_bdd_sample_indices(data)
-    data_l.insert(3, ["mean class (bdd100k)"] + data[samp_bdd].mean(dim=0).tolist())
+    # CRITICAL FIX: For Cityscapes/BDD100K, only compute mean over classes with actual data
+    # Filter to classes with non-zero calibration samples
+    samp_nonzero = torch.where(nr_calib_samp > 0)[0]
+    
+    # Determine dataset name and appropriate class filtering
+    if len(samp_nonzero) == 7:  # Cityscapes case
+        dataset_label = "cityscapes"
+        # For Cityscapes, use only the classes that have data
+        samp_dataset = samp_nonzero
+    elif len(samp_nonzero) == 9:  # BDD100K case
+        dataset_label = "bdd100k" 
+        # For BDD100K, use only the classes that have data
+        samp_dataset = samp_nonzero
+    else:
+        # Fallback: use the old method for other datasets
+        samp_dataset = get_dataset_sample_indices(data)
+        dataset_label = "dataset"
+    
+    data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
     samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
     data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
