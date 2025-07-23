@@ -245,8 +245,41 @@ def get_results_table(
     
     data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
-    samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
-    data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+    # CRITICAL FIX: Handle class filtering for selected classes
+    selected_classes = list(util.get_selected_coco_classes().values())
+    
+    # Check if we're dealing with filtered data (like Cityscapes with 7 classes)
+    if data.shape[0] < 80:  # Filtered data detected
+        # Need to map original COCO indices to filtered indices
+        # For Cityscapes: valid_classes = [0, 1, 2, 3, 5, 6, 7]
+        # So class 0->0, 1->1, 2->2, 3->3, 5->4, 6->5, 7->6
+        
+        # Get available classes from data size and common filtering patterns
+        if data.shape[0] == 7:  # Cityscapes filtering
+            valid_classes = [0, 1, 2, 3, 5, 6, 7]  # Cityscapes COCO mapping
+        elif data.shape[0] == 9:  # BDD100K filtering  
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # BDD100K COCO mapping
+        else:
+            # Fallback: use first N classes
+            valid_classes = list(range(data.shape[0]))
+        
+        # Map original selected class indices to filtered indices
+        filtered_indices = []
+        for orig_idx in selected_classes:
+            if orig_idx in valid_classes:
+                filtered_idx = valid_classes.index(orig_idx)
+                filtered_indices.append(filtered_idx)
+        
+        if filtered_indices:  # Only add if we have valid indices
+            samp_select = torch.tensor(filtered_indices)
+            data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+        else:
+            # No selected classes available in filtered data, skip this row
+            pass
+    else:
+        # Full COCO data, use original indices
+        samp_select = torch.tensor(selected_classes)
+        data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
 
     # Column names
     colnames = ["class"] + metrics
@@ -355,8 +388,36 @@ def get_box_set_results_table(
     
     data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
-    samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
-    data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+    # CRITICAL FIX: Handle class filtering for selected classes (in get_box_set_results_table)
+    selected_classes = list(util.get_selected_coco_classes().values())
+    
+    # Check if we're dealing with filtered data (like Cityscapes with 7 classes)
+    if data.shape[0] < 80:  # Filtered data detected
+        # Get available classes from data size and common filtering patterns
+        if data.shape[0] == 7:  # Cityscapes filtering
+            valid_classes = [0, 1, 2, 3, 5, 6, 7]  # Cityscapes COCO mapping
+        elif data.shape[0] == 9:  # BDD100K filtering  
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # BDD100K COCO mapping
+        else:
+            valid_classes = list(range(data.shape[0]))
+        
+        # Map original selected class indices to filtered indices
+        filtered_indices = []
+        for orig_idx in selected_classes:
+            if orig_idx in valid_classes:
+                filtered_idx = valid_classes.index(orig_idx)
+                filtered_indices.append(filtered_idx)
+        
+        if filtered_indices:  # Only add if we have valid indices
+            samp_select = torch.tensor(filtered_indices)
+            data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+        else:
+            # No selected classes available in filtered data, skip this row
+            pass
+    else:
+        # Full COCO data, use original indices
+        samp_select = torch.tensor(selected_classes)
+        data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
 
     # Column names
     colnames = ["class"] + metrics
@@ -424,8 +485,36 @@ def get_label_results_table(
     
     data_l.insert(3, [f"mean class ({dataset_label})"] + data[samp_dataset].mean(dim=0).tolist())
 
-    samp_select = torch.tensor(list(util.get_selected_coco_classes().values()))
-    data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+    # CRITICAL FIX: Handle class filtering for selected classes (in get_label_results_table)
+    selected_classes = list(util.get_selected_coco_classes().values())
+    
+    # Check if we're dealing with filtered data (like Cityscapes with 7 classes)
+    if data.shape[0] < 80:  # Filtered data detected
+        # Get available classes from data size and common filtering patterns
+        if data.shape[0] == 7:  # Cityscapes filtering
+            valid_classes = [0, 1, 2, 3, 5, 6, 7]  # Cityscapes COCO mapping
+        elif data.shape[0] == 9:  # BDD100K filtering  
+            valid_classes = [0, 1, 2, 3, 5, 6, 7, 9, 11]  # BDD100K COCO mapping
+        else:
+            valid_classes = list(range(data.shape[0]))
+        
+        # Map original selected class indices to filtered indices
+        filtered_indices = []
+        for orig_idx in selected_classes:
+            if orig_idx in valid_classes:
+                filtered_idx = valid_classes.index(orig_idx)
+                filtered_indices.append(filtered_idx)
+        
+        if filtered_indices:  # Only add if we have valid indices
+            samp_select = torch.tensor(filtered_indices)
+            data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
+        else:
+            # No selected classes available in filtered data, skip this row
+            pass
+    else:
+        # Full COCO data, use original indices
+        samp_select = torch.tensor(selected_classes)
+        data_l.insert(4, ["mean class (selected)"] + data[samp_select].mean(dim=0).tolist())
 
     # Column names
     colnames = ["class"] + metrics

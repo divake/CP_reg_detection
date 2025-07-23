@@ -4,7 +4,7 @@
 """
 Various Base Model Performance Analysis Script
 
-This script analyzes coverage and MPIW performance across 12 different base models
+This script analyzes coverage and MPIW performance across 14 different base models
 using standard conformal prediction, CQR, and ensemble methods.
 
 Base Models Analyzed:
@@ -20,6 +20,8 @@ Base Models Analyzed:
 10. ResNeXt-101-FPN (CQR BDD100K)
 11. ResNeXt-101-FPN (Ensemble BDD100K)
 12. ResNeXt-101-FPN (Cityscapes)
+13. ResNeXt-101-FPN (CQR Cityscapes)
+14. ResNeXt-101-FPN (Ensemble Cityscapes)
 
 Output: Simple coverage and MPIW statistics for each base model
 """
@@ -94,6 +96,16 @@ BASE_MODEL_CONFIGS = {
         'model_name': 'ResNeXt-101-FPN (Cityscapes)',
         'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_x101fpn_std_rank_class_cityscapes',
         'data_file': 'std_conf_x101fpn_std_rank_class_cityscapes_box_set.pt'
+    },
+    'x101fpn_cqr_cityscapes': {
+        'model_name': 'ResNeXt-101-FPN (CQR Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/cqr_conf_x101fpn_cqr_rank_cityscapes',
+        'data_file': 'cqr_conf_x101fpn_cqr_rank_cityscapes_box_set.pt'
+    },
+    'x101fpn_ens_cityscapes': {
+        'model_name': 'ResNeXt-101-FPN (Ensemble Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/ens_conf_x101fpn_ens_rank_cityscapes',
+        'data_file': 'ens_conf_x101fpn_ens_rank_cityscapes_box_set.pt'
     }
 }
 
@@ -196,7 +208,7 @@ def analyze_all_models():
     print("=" * 80)
     print("VARIOUS BASE MODEL PERFORMANCE ANALYSIS")
     print("=" * 80)
-    print("Analyzing coverage and MPIW for 12 different base models")
+    print("Analyzing coverage and MPIW for 14 different base models")
     print("Methods: Standard Conformal Prediction (std_conf), CQR (cqr_conf), and Ensemble (ens_conf)")
     print("Datasets: COCO validation set, BDD100K validation set, Cityscapes validation set")
     print()

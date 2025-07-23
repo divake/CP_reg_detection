@@ -216,10 +216,15 @@ class LabelSet:
                 )
 
                 # label set-based box quantile selection strategy
-                # CRITICAL FIX: Filter box_quantiles to match filtered label_set dimensions
+                # CRITICAL FIX: Handle box_quantiles indexing for class filtering
                 if hasattr(self, 'valid_classes') and self.valid_classes is not None:
-                    # Filter box_quantiles to only valid classes to match label_set
-                    filtered_box_quantiles = self.box_quantiles[t][self.valid_classes]
+                    # Check if box_quantiles is already filtered (size matches valid_classes length)
+                    if self.box_quantiles[t].shape[0] == len(self.valid_classes):
+                        # box_quantiles is already filtered, use directly
+                        filtered_box_quantiles = self.box_quantiles[t]
+                    else:
+                        # box_quantiles contains all classes, filter to valid ones
+                        filtered_box_quantiles = self.box_quantiles[t][self.valid_classes]
                 else:
                     filtered_box_quantiles = self.box_quantiles[t]
                 
@@ -452,7 +457,18 @@ class ClassThresholdSet(LabelSet):
             return 1 - pred_score_all
         else:
             # If 2D, it's class probabilities, so return 1 - class probability of ground truth class
-            return 1 - pred_score_all[:, gt_class]
+            # Handle class filtering: map original class ID to filtered index
+            if self.valid_classes is not None and pred_score_all.shape[1] == len(self.valid_classes):
+                # pred_score_all has been filtered, need to map gt_class to filtered index
+                if gt_class in self.valid_classes:
+                    filtered_idx = self.valid_classes.index(gt_class)
+                    return 1 - pred_score_all[:, filtered_idx]
+                else:
+                    # If gt_class is not in valid classes, return high uncertainty (score=1)
+                    return torch.ones(pred_score_all.shape[0], device=pred_score_all.device)
+            else:
+                # No filtering or unfiltered tensor, use original class ID
+                return 1 - pred_score_all[:, gt_class]
 
     def get_pred_set(self, pred_score_all: torch.Tensor, q=None):
         label_q = self.label_q if q is None else q

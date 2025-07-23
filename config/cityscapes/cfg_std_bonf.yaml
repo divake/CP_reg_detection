@@ -7,7 +7,7 @@ PROJECT:
   CONFIG_DIR: "conformalbb/config"
   CHECKPOINT_DIR: "checkpoints"
   RESULTS_DIR: "results"
-  OUTPUT_DIR: &outputdir "../../../../media/atimans/hdd/output"
+  OUTPUT_DIR: &outputdir "output"
   PLOT_DIR: "plots"
   SEED: &seed 6666666
 
@@ -15,15 +15,15 @@ PROJECT:
 DATASETS:
   DIR: "data"
   DATASET:
-    NAME: "cityscapes"
-    IMG_DIR: "cityscapes/leftImg8bit/train"
-    ANN_FILE: "cityscapes/gtFine/train"
+    NAME: "cityscapes_val"
+    IMG_DIR: "cityscapes/leftImg8bit/val"
+    ANN_FILE: "cityscapes/gtFine/val"
     METADATA_FILE: null
     FORMAT: "cityscapes"
     # set to BGR for coco, RGB for bdd and cityscapes
     CHANNELS: &channels "RGB"
     # set to true for coco, false for bdd and cityscapes
-    FILTER_EMPTY: false
+    FILTER_EMPTY: true
 
 
 DATALOADER:
