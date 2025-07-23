@@ -1,0 +1,14 @@
+# Configuration for BDD100K dataset
+# Inherits from base config and overrides specific values
+
+base_config: base_config.yaml
+
+# Dataset specific overrides
+dataset:
+  name: bdd100k
+  num_classes: 10  # BDD100K has 10 object classes
+  # Note: cache_dir will be set based on selected model
+  # e.g., cache_base_model_resnet101_bdd100k
+
+# Using same configuration as COCO for now
+# All other parameters (loss, training, calibration) inherited from base_config

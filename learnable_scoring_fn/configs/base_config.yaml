@@ -1,44 +1,141 @@
-# Common configuration for all models
-DATA:
-  CACHE_DIR: "experiments/cache"
-  CALIB_FRACTION: 0.5
-  LIMIT_DATASET_SIZE: false
-  MAX_TRAIN_IMAGES: -1
-  MAX_VAL_IMAGES: -1
-  BATCH_SIZE: 128
+# Base configuration for symmetric adaptive conformal prediction
+# This is the master config that defines all possible settings
 
-TRAINING:
-  NUM_EPOCHS: 100
-  BATCH_SIZE: 128
-  LEARNING_RATE: 0.001
-  WEIGHT_DECAY: 0.0001
-  GRAD_CLIP_NORM: 1.0
-  EARLY_STOPPING_PATIENCE: 20
-  CHECKPOINT_FREQUENCY: 10
-  DEVICE: "cuda"
-  SEED: 42
-  LR_SCHEDULER:
-    TYPE: "reduce_on_plateau"
-    FACTOR: 0.5
-    PATIENCE: 10
-    MIN_LR: 1e-6
+# Dataset configuration
+dataset:
+  # No default dataset - must be specified via --dataset argument
+  # name: REQUIRED via --dataset
+  # num_classes: will be set based on dataset choice
+  # Note: cache_dir will be automatically set based on selected model
+  # from model.cache_dirs mapping
+  data_split:
+    train_fraction: 0.8
+    val_fraction: 0.2
+    calib_fraction: 0.5  # From validation set
+  filter_empty: true
 
-LOSS:
-  TARGET_COVERAGE: 0.9
-  EFFICIENCY_WEIGHT: 0.05
-  CALIBRATION_WEIGHT: 0.1
+# Model configuration
+model:
+  # No default base_model - must be specified via --base_model argument
+  # Model cache directory mapping per dataset
+  # Structure: cache_dirs[dataset][model] = cache_directory_path
+  cache_dirs:
+    coco:
+      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50
+      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101
+      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101
+      # Add more COCO models as needed:
+      # cascade_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_cascade_r50fpn
+      # cascade_r101fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_cascade_r101fpn
+      # fcos_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_fcos_r50fpn
+      # retinanet_r50fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_retinanet_r50fpn
+    
+    cityscapes:
+      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50_cityscapes
+      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101_cityscapes
+      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101_cityscapes
+      # Add more Cityscapes models as needed
+    
+    bdd100k:
+      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50_bdd100k
+      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101_bdd100k
+      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101_bdd100k
+      # Add more BDD100K models as needed
+  
+  # Architecture settings (same for all models)
+  architecture:
+    hidden_dims: [256, 128, 64]
+    dropout_rate: 0.1
+    activation: elu
+    use_batch_norm: true
+  
+# Training configuration
+training:
+  learning_rate: 0.0005
+  epochs: 50
+  batch_size: 256
+  num_workers: 4
+  early_stopping_patience: 20
+  warmup_epochs: 3
+  grad_clip_norm: 0.5
+  weight_decay: 0.0001
+  
+  # Learning rate scheduler
+  lr_scheduler:
+    type: cosine  # Options: cosine, step, exponential, none
+    min_lr: 0.0000001
+    # For step scheduler
+    step_size: 10
+    gamma: 0.1
+    # For exponential scheduler
+    decay_rate: 0.95
 
-OUTPUT:
-  BASE_DIR: "experiments/results"
-  SAVE_FREQUENCY: 10
-  PLOT_RESULTS: true
-  SAVE_PREDICTIONS: true
+# Loss configuration
+loss:
+  # Size-aware settings
+  use_size_aware_loss: true
+  size_targets:
+    small: 0.90
+    medium: 0.89
+    large: 0.85
+  lambda_efficiency: 0.25
+  coverage_loss_type: smooth_l1  # Options: mse, smooth_l1, huber
+  size_normalization: true
+  
+  # Size thresholds (based on sqrt of area)
+  size_thresholds:
+    small: 32.0   # Objects smaller than 32x32
+    large: 96.0   # Objects larger than 96x96
+  
+  # Loss-specific parameters
+  smooth_l1_beta: 1.0
+  huber_delta: 1.0
 
-VALIDATION:
-  EVAL_FREQUENCY: 1  # Evaluate every N epochs
-  VERBOSE: true
+# Calibration configuration
+calibration:
+  target_coverage: 0.89
+  min_coverage: 0.88
+  max_coverage: 0.905
+  tau_smoothing: 0.6
+  min_tau: 0.2
+  max_tau: 5.0
 
-WANDB:
-  USE_WANDB: false
-  PROJECT: "conformal-scoring-functions"
-  TAGS: ["learnable", "scoring"]
+# Output configuration
+output:
+  base_dir: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric
+  log_dir: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/logs/symmetric
+  # Model naming pattern: {dataset}_{base_model}_{timestamp}
+  model_name_pattern: "{dataset}_{base_model}_{timestamp}"
+  # Note: Model saving is handled by coverage-based logic in the code
+  # Models are saved when coverage is within target range with best MPIW
+  
+# Experiment configuration
+experiment:
+  seed: 42
+  reproducible: true
+  device: cuda  # Options: cuda, cuda:0, cuda:1, cpu
+  mixed_precision: false
+  
+# Logging configuration
+logging:
+  level: INFO  # Options: DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_to_console: true
+  tensorboard: false
+  wandb:
+    enabled: false
+    project: conformal-od
+    entity: null
+
+# Data augmentation (for future use)
+augmentation:
+  enabled: false
+  calibration_augment: false
+  
+# Evaluation configuration  
+evaluation:
+  compute_size_metrics: true
+  size_bins:
+    small: [0, 1024]      # 0 to 32²
+    medium: [1024, 9216]  # 32² to 96²
+    large: [9216, inf]    # 96² to inf

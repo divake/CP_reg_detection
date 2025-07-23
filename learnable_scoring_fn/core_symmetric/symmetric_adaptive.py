@@ -175,9 +175,10 @@ def compute_size_stratified_metrics(
 
 def train_symmetric_adaptive(
     config: Dict,
-    cache_dir: str = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model",
-    output_dir: str = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric",
-    log_dir: str = "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/logs/symmetric"
+    cache_dir: str,
+    output_dir: str,
+    log_dir: Optional[str] = None,
+    device: Optional[str] = None
 ):
     """
     Main training function for symmetric adaptive conformal prediction.
@@ -188,23 +189,12 @@ def train_symmetric_adaptive(
         output_dir: Directory to save models
         log_dir: Directory for logs
     """
-    # Use the output_dir directly if it already contains a timestamp
-    # Otherwise create a timestamped directory
+    # Use the output_dir directly - don't create nested directories
     experiment_dir = Path(output_dir)
-    
-    # Check if output_dir already has a timestamp pattern (ends with YYYYMMDD_HHMMSS)
-    import re
-    if re.search(r'\d{8}_\d{6}$', experiment_dir.name):
-        # Already has timestamp, use as is
-        experiment_name = experiment_dir.name
-    else:
-        # No timestamp, create one
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        experiment_name = f"symmetric_adaptive_{timestamp}"
-        experiment_dir = experiment_dir / experiment_name
-    
     experiment_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Extract experiment name from the directory name
+    experiment_name = experiment_dir.name
     
     # Create subdirectories
     model_dir = experiment_dir / "models"
@@ -212,15 +202,13 @@ def train_symmetric_adaptive(
     plot_dir = experiment_dir / "plots"
     plot_dir.mkdir(exist_ok=True)
     
-    # Initialize logger with experiment-specific directory
-    # Use the experiment_dir's parent if it already contains the full path
-    if re.search(r'\d{8}_\d{6}$', Path(output_dir).name):
-        logger = AdaptiveConformalLogger(str(experiment_dir.parent), experiment_name)
-    else:
-        logger = AdaptiveConformalLogger(log_dir, experiment_name)
+    # Initialize logger with proper directory
+    logger = AdaptiveConformalLogger(log_dir, experiment_name)
     
     # Set device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if device is None:
+        device = config.get('experiment', {}).get('device', 'cuda')
+    device = torch.device(device if torch.cuda.is_available() or device == 'cpu' else 'cpu')
     print(f"Using device: {device}")
     
     # Load cached data
@@ -243,9 +231,9 @@ def train_symmetric_adaptive(
     )
     train_loader = DataLoader(
         train_dataset,
-        batch_size=config['batch_size'],
+        batch_size=config['training']['batch_size'],
         shuffle=True,
-        num_workers=4
+        num_workers=config['training'].get('num_workers', 4)
     )
     
     calib_dataset = TensorDataset(
@@ -255,8 +243,9 @@ def train_symmetric_adaptive(
     )
     calib_loader = DataLoader(
         calib_dataset,
-        batch_size=config['batch_size'],
-        shuffle=False
+        batch_size=config['training']['batch_size'],
+        shuffle=False,
+        num_workers=config['training'].get('num_workers', 4)
     )
     
     test_dataset = TensorDataset(
@@ -266,68 +255,88 @@ def train_symmetric_adaptive(
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=config['batch_size'],
-        shuffle=False
+        batch_size=config['training']['batch_size'],
+        shuffle=False,
+        num_workers=config['training'].get('num_workers', 4)
     )
     
     # Initialize model
+    feature_dim = train_features.shape[1]
+    model_config = config['model']['architecture']
     model = SymmetricAdaptiveMLP(
-        input_dim=17,
-        hidden_dims=config.get('hidden_dims', [128, 128]),
-        dropout_rate=config.get('dropout_rate', 0.1),
-        activation=config.get('activation', 'relu'),
-        use_batch_norm=config.get('use_batch_norm', True)
+        input_dim=feature_dim,
+        hidden_dims=model_config['hidden_dims'],
+        dropout_rate=model_config['dropout_rate'],
+        activation=model_config['activation'],
+        use_batch_norm=model_config['use_batch_norm']
     ).to(device)
     
     print(f"Model: {model.model_name}")
     print(f"Parameters: {sum(p.numel() for p in model.parameters())}")
     
     # Initialize loss function
-    if config.get('use_size_aware_loss', False):
+    loss_config = config['loss']
+    if loss_config.get('use_size_aware_loss', False):
         from .losses.size_aware_loss import SizeAwareSymmetricLoss
         criterion = SizeAwareSymmetricLoss(
-            small_target_coverage=config.get('small_target_coverage', 0.90),
-            medium_target_coverage=config.get('medium_target_coverage', 0.89),
-            large_target_coverage=config.get('large_target_coverage', 0.85),
-            lambda_efficiency=config['lambda_efficiency'],
-            coverage_loss_type=config.get('coverage_loss_type', 'smooth_l1'),
-            size_normalization=config.get('size_normalization', True),
-            small_threshold=config.get('small_threshold', 32.0),
-            large_threshold=config.get('large_threshold', 96.0)
+            small_target_coverage=loss_config['size_targets']['small'],
+            medium_target_coverage=loss_config['size_targets']['medium'],
+            large_target_coverage=loss_config['size_targets']['large'],
+            lambda_efficiency=loss_config['lambda_efficiency'],
+            coverage_loss_type=loss_config['coverage_loss_type'],
+            size_normalization=loss_config['size_normalization'],
+            small_threshold=loss_config['size_thresholds']['small'],
+            large_threshold=loss_config['size_thresholds']['large']
         )
         print("Using SizeAwareSymmetricLoss with targets:")
-        print(f"  Small objects (<{config.get('small_threshold', 32.0)}): {config.get('small_target_coverage', 0.90):.0%}")
-        print(f"  Medium objects: {config.get('medium_target_coverage', 0.89):.0%}")
-        print(f"  Large objects (>{config.get('large_threshold', 96.0)}): {config.get('large_target_coverage', 0.85):.0%}")
+        print(f"  Small objects (<{loss_config['size_thresholds']['small']}): {loss_config['size_targets']['small']:.0%}")
+        print(f"  Medium objects: {loss_config['size_targets']['medium']:.0%}")
+        print(f"  Large objects (>{loss_config['size_thresholds']['large']}): {loss_config['size_targets']['large']:.0%}")
     else:
         criterion = SymmetricAdaptiveLoss(
-            target_coverage=config['target_coverage'],
-            lambda_efficiency=config['lambda_efficiency'],
-            coverage_loss_type=config.get('coverage_loss_type', 'smooth_l1'),
-            size_normalization=config.get('size_normalization', True)
+            target_coverage=config['calibration']['target_coverage'],
+            lambda_efficiency=loss_config['lambda_efficiency'],
+            coverage_loss_type=loss_config['coverage_loss_type'],
+            size_normalization=loss_config.get('size_normalization', True)
         )
     
     # Initialize optimizer
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=config['learning_rate'],
-        weight_decay=config.get('weight_decay', 1e-4)
+        lr=config['training']['learning_rate'],
+        weight_decay=config['training']['weight_decay']
     )
     
     # Initialize scheduler
-    if config.get('lr_scheduler') == 'cosine':
+    lr_scheduler_config = config['training']['lr_scheduler']
+    scheduler_type = lr_scheduler_config['type']
+    if scheduler_type == 'cosine':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=config['epochs'],
-            eta_min=config.get('min_lr', 1e-6)
+            T_max=config['training']['epochs'],
+            eta_min=lr_scheduler_config['min_lr']
+        )
+    elif scheduler_type == 'step':
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=lr_scheduler_config.get('step_size', 10),
+            gamma=lr_scheduler_config.get('gamma', 0.1)
+        )
+    elif scheduler_type == 'exponential':
+        scheduler = optim.lr_scheduler.ExponentialLR(
+            optimizer,
+            gamma=lr_scheduler_config.get('decay_rate', 0.95)
         )
     else:
         scheduler = None
     
-    # Initialize tau calibrator
+    # Initialize tau calibrator  
+    calib_config = config['calibration']
     tau_calibrator = TauCalibrator(
-        target_coverage=config['target_coverage'],
-        smoothing_factor=config.get('tau_smoothing', 0.7)
+        target_coverage=calib_config['target_coverage'],
+        min_tau=calib_config['min_tau'],
+        max_tau=calib_config['max_tau'],
+        smoothing_factor=calib_config['tau_smoothing']
     )
     
     # Training state
@@ -337,7 +346,7 @@ def train_symmetric_adaptive(
     history = {}
     
     # Training loop
-    for epoch in range(1, config['epochs'] + 1):
+    for epoch in range(1, config['training']['epochs'] + 1):
         logger.log_epoch_start(epoch, current_tau)
         
         # Phase 1: Training
@@ -389,7 +398,7 @@ def train_symmetric_adaptive(
         if epoch > 1:
             old_tau = current_tau
             current_tau, calib_stats = tau_calibrator.calibrate(
-                model, calib_data, config['batch_size'], device
+                model, calib_data, config['training']['batch_size'], device
             )
             logger.log_calibration_phase(epoch, old_tau, current_tau, calib_stats)
         
@@ -433,9 +442,9 @@ def train_symmetric_adaptive(
         logger.log_validation_phase(epoch, val_metrics, size_metrics)
         
         # Smart model checkpointing
-        coverage_error = abs(val_metrics['coverage_rate'] - config['target_coverage'])
-        min_target_coverage = config.get('min_coverage', 0.88)
-        max_target_coverage = config.get('max_coverage', 0.905)
+        coverage_error = abs(val_metrics['coverage_rate'] - config['calibration']['target_coverage'])
+        min_target_coverage = config['calibration']['min_coverage']
+        max_target_coverage = config['calibration']['max_coverage']
         
         # Save best model logic - prioritize coverage in target range with lowest MPIW
         save_model = False
@@ -496,12 +505,14 @@ def train_symmetric_adaptive(
         logger.create_visualization(epoch)
         
         # Early stopping check based on stable coverage
-        if epoch > config.get('warmup_epochs', 5):
+        if epoch > config['training'].get('warmup_epochs', 5):
             # Check if we have enough history
             if len(history.get('coverage_rate', [])) >= 10:
                 recent_coverages = history['coverage_rate'][-10:]
-                # Check if coverage is stable in target range (88-90.5%)
-                if all(0.88 <= c <= 0.905 for c in recent_coverages):
+                # Check if coverage is stable in target range
+                min_cov = config['calibration']['min_coverage']
+                max_cov = config['calibration']['max_coverage']
+                if all(min_cov <= c <= max_cov for c in recent_coverages):
                     recent_mpiws = history['avg_mpiw'][-10:]
                     avg_coverage = np.mean(recent_coverages)
                     std_coverage = np.std(recent_coverages)

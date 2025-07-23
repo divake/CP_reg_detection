@@ -19,6 +19,7 @@ import random
 import json
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
+import argparse
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -30,8 +31,14 @@ from core_symmetric.symmetric_adaptive import (
     train_symmetric_adaptive
 )
 
+# Import configuration utilities
+from utils.config_utils import (
+    parse_args_and_config,
+    get_experiment_name
+)
 
-def set_seed(seed: int):
+
+def set_seed(seed: int, reproducible: bool = True):
     """Set random seed for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
@@ -39,9 +46,13 @@ def set_seed(seed: int):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    print(f"Set random seed to {seed}")
+    if reproducible:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+    print(f"Set random seed to {seed} (reproducible={reproducible})")
 
 
 def save_comprehensive_results(
@@ -166,17 +177,17 @@ def save_comprehensive_results(
         
         # Configuration
         'configuration': {
-            'target_coverage': config.get('target_coverage', 0.89),
-            'min_coverage': config.get('min_coverage', 0.88),
-            'max_coverage': config.get('max_coverage', 0.905),
-            'size_targets': config.get('size_targets', {}),
-            'epochs': config.get('epochs', 50),
-            'batch_size': config.get('batch_size', 256),
-            'learning_rate': config.get('learning_rate', 0.0005),
-            'hidden_dims': config.get('hidden_dims', [256, 128, 64]),
-            'lambda_efficiency': config.get('lambda_efficiency', 0.25),
-            'tau_smoothing': config.get('tau_smoothing', 0.6),
-            'cache_directory': str(Path(config.get('cache_dir', '')).name)
+            'target_coverage': config['calibration']['target_coverage'],
+            'min_coverage': config['calibration']['min_coverage'],
+            'max_coverage': config['calibration']['max_coverage'],
+            'size_targets': config['loss'].get('size_targets', {}),
+            'epochs': config['training']['epochs'],
+            'batch_size': config['training']['batch_size'],
+            'learning_rate': config['training']['learning_rate'],
+            'hidden_dims': config['model']['architecture']['hidden_dims'],
+            'lambda_efficiency': config['loss']['lambda_efficiency'],
+            'tau_smoothing': config['calibration']['tau_smoothing'],
+            'cache_directory': str(Path(config['dataset']['cache_dir']).name)
         },
         
         # Main results - formatted like plots_various_base_model.py
@@ -196,7 +207,7 @@ def save_comprehensive_results(
                 'range_string': f"{mpiw_stats.get('mean', 0):.1f} ± {mpiw_stats.get('std', 0):.1f} (range: {mpiw_stats.get('min', 0):.1f} - {mpiw_stats.get('max', 0):.1f})"
             },
             'n_epochs': len(val_coverages),
-            'n_classes': 80  # COCO has 80 classes
+            'n_classes': config.get('dataset', {}).get('num_classes', 80)
         },
         
         # Size-stratified results
@@ -272,47 +283,63 @@ def save_comprehensive_results(
     print(f"📄 Saved summary to: {summary_path}")
 
 
-def main():
+def main(args=None):
     """Run size-aware symmetric adaptive training."""
     
+    # Parse arguments and load configuration
+    parsed_args, config = parse_args_and_config(args)
+    
     # Set seed for reproducibility
-    seed = 42
-    set_seed(seed)
+    seed = config['experiment']['seed']
+    reproducible = config['experiment']['reproducible']
+    set_seed(seed, reproducible)
     
-    # Load configuration
-    config_path = Path(__file__).parent / "configs" / "symmetric_size_aware.yaml"
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+    # Set device
+    device = config['experiment']['device']
+    if device != 'cpu' and not torch.cuda.is_available():
+        print("CUDA not available, falling back to CPU")
+        device = 'cpu'
     
-    # Paths
-    cache_dir = config.get('cache_dir', 
-                           "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101")
+    # Get paths from config
+    cache_dir = config['dataset']['cache_dir']
     
-    # Extract model name from cache directory
-    cache_name = Path(cache_dir).name
-    if cache_name.startswith("cache_base_model_"):
-        model_name = cache_name.replace("cache_base_model_", "").lower()
+    # Extract model name from config or cache directory
+    model_name = config['model']['base_model']
+    
+    # Create output directory
+    if parsed_args.experiment_name:
+        experiment_name = parsed_args.experiment_name
     else:
-        model_name = "unknown"
+        experiment_name = get_experiment_name(config)
     
-    # Create timestamped output directory with dataset and model name
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path(config.get('output_dir',
-                     "/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric"))
-    output_dir = output_dir / f"coco_{model_name}_{timestamp}"
+    output_dir = Path(config['output']['base_dir']) / experiment_name
     
     print("="*80)
     print("Size-Aware Symmetric Adaptive Conformal Prediction")
     print("="*80)
-    print(f"Configuration: {config_path.name}")
-    print(f"Target coverage: {config['target_coverage']:.1%} "
-          f"(range: {config['min_coverage']:.1%}-{config['max_coverage']:.1%})")
-    print(f"Size-specific targets:")
-    print(f"  Small (<32²): {config['size_targets']['small']:.0%}")
-    print(f"  Medium: {config['size_targets']['medium']:.0%}")
-    print(f"  Large (>96²): {config['size_targets']['large']:.0%}")
+    print(f"Configuration: {parsed_args.config}")
+    print(f"Dataset: {config['dataset']['name']}")
+    print(f"Base model: {model_name}")
+    print(f"Cache directory: {cache_dir}")
+    print(f"Device: {device}")
+    print(f"Target coverage: {config['calibration']['target_coverage']:.1%} "
+          f"(range: {config['calibration']['min_coverage']:.1%}-{config['calibration']['max_coverage']:.1%})")
+    
+    if config['loss']['use_size_aware_loss']:
+        print(f"Size-specific targets:")
+        print(f"  Small (<{config['loss']['size_thresholds']['small']}²): {config['loss']['size_targets']['small']:.0%}")
+        print(f"  Medium: {config['loss']['size_targets']['medium']:.0%}")
+        print(f"  Large (>{config['loss']['size_thresholds']['large']}²): {config['loss']['size_targets']['large']:.0%}")
+    
     print(f"Seed: {seed}")
+    print(f"Output directory: {output_dir}")
     print("="*80)
+    
+    # Verify cache directory exists
+    if not Path(cache_dir).exists():
+        print(f"\n❌ ERROR: Cache directory does not exist: {cache_dir}")
+        print(f"Please ensure the model cache has been generated for {model_name} on {config['dataset']['name']} dataset.")
+        return 1
     
     # Record training start time
     import time
@@ -323,7 +350,9 @@ def main():
         results = train_symmetric_adaptive(
             config=config,
             cache_dir=cache_dir,
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
+            log_dir=config.get('output', {}).get('log_dir', str(output_dir.parent)),  # Use log_dir from config
+            device=device
         )
         
         print("\n" + "="*80)
@@ -348,6 +377,12 @@ def main():
                 print("Training completed successfully")
         else:
             print("Training completed with results")
+            
+        # Save configuration used
+        config_save_path = output_dir / 'config_used.yaml'
+        with open(config_save_path, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        print(f"\nSaved configuration to: {config_save_path}")
         
         print("\nExpected benefits:")
         print("- Small objects: High coverage with minimal MPIW increase")

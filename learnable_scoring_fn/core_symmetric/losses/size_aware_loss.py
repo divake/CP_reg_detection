@@ -16,15 +16,15 @@ class SizeAwareSymmetricLoss(nn.Module):
     
     def __init__(
         self,
-        small_target_coverage: float = 0.90,   # Target 90% for small objects
-        medium_target_coverage: float = 0.89,  # Target 89% for medium objects
-        large_target_coverage: float = 0.85,   # Target 85% for large objects
-        lambda_efficiency: float = 0.35,
-        coverage_loss_type: str = 'smooth_l1',
-        size_normalization: bool = True,
+        small_target_coverage: float,   # Target coverage for small objects
+        medium_target_coverage: float,  # Target coverage for medium objects
+        large_target_coverage: float,   # Target coverage for large objects
+        lambda_efficiency: float,
+        coverage_loss_type: str,
+        size_normalization: bool,
         # Size thresholds (based on sqrt of area)
-        small_threshold: float = 32.0,    # Objects smaller than 32x32
-        large_threshold: float = 96.0,    # Objects larger than 96x96
+        small_threshold: float,    # Objects smaller than threshold
+        large_threshold: float,    # Objects larger than threshold
     ):
         """
         Initialize the size-aware loss function.
@@ -216,7 +216,7 @@ class SizeAwareSymmetricLoss(nn.Module):
             'total': total_loss,
             'coverage': coverage_loss,
             'efficiency': efficiency_loss,
-            'coverage_penalty': torch.tensor(coverage_penalty),
+            'coverage_penalty': torch.tensor(coverage_penalty, device=device),
             'coverage_rate': coverage_rate,
             'avg_mpiw': avg_mpiw,
             'normalized_mpiw': avg_normalized_mpiw,
