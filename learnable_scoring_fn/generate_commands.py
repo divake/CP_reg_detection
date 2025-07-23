@@ -76,6 +76,9 @@ def generate_commands(
     with open(output_path, 'w') as f:
         for cmd in commands:
             f.write(cmd + "\n")
+        # Ensure file ends with newline
+        if commands and not cmd.endswith('\n'):
+            f.write('\n')
     
     print(f"\nGenerated {len(commands)} commands in {output_path}")
     print(f"Datasets: {', '.join(datasets)}")

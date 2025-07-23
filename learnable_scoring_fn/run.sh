@@ -1,18 +1,33 @@
 #!/bin/bash
 
+# Default to commands.txt if no argument provided
+COMMANDS_FILE=${1:-commands.txt}
+
+# Check if commands file exists
+if [ ! -f "$COMMANDS_FILE" ]; then
+    echo "Error: Commands file '$COMMANDS_FILE' not found!"
+    exit 1
+fi
+
 echo "++++++++++++++++++++++++++++++++++++"
 echo "+++ start experiments run script +++"
+echo "+++ Reading from: $COMMANDS_FILE"
 echo "++++++++++++++++++++++++++++++++++++"
 echo ""
 
-# Remove existing log file
-rm -f run_error_log.txt
+# Create unique log file based on commands file name
+LOG_FILE="run_error_log_$(basename "$COMMANDS_FILE" .txt).txt"
+rm -f "$LOG_FILE"
 
-# Read commands from commands.txt and execute them
+# Read commands from specified file and execute them
 echo "+++ executing commands in series"
 echo ""
 
-while read -r command; do
+while IFS= read -r command || [ -n "$command" ]; do
+    # Skip empty lines
+    if [ -z "$command" ]; then
+        continue
+    fi
 
     echo "executing command: $command"
     echo ""
@@ -25,14 +40,14 @@ while read -r command; do
     # Check if command was successful
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
         # Command failed. Log to error file
-        echo "FAILED command: $command" >> run_error_log.txt
-        cat "$output" >> run_error_log.txt
-        echo "" >> run_error_log.txt
-        echo "" >> run_error_log.txt
+        echo "FAILED command: $command" >> "$LOG_FILE"
+        cat "$output" >> "$LOG_FILE"
+        echo "" >> "$LOG_FILE"
+        echo "" >> "$LOG_FILE"
     fi
     rm "$output"
 
-done < commands.txt
+done < "$COMMANDS_FILE"
 
 echo "++++++++++++++++++++++++++++++++++"
 echo "+++ end experiments run script +++"
