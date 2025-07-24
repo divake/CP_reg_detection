@@ -67,21 +67,21 @@ BASE_MODEL_CONFIGS = {
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k',
         'data_file': 'std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k_box_set.pt'
     },
-    'x101fpn_fp16': {
-        'model_name': 'ResNeXt-101-FPN (FP16)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_std_rank_class_fp16',
-        'data_file': 'std_conf_x101fpn_fp16_std_rank_class_fp16_box_set.pt'
-    },
-    'x101fpn_int8': {
-        'model_name': 'ResNeXt-101-FPN (INT8)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_std_rank_class_int8',
-        'data_file': 'std_conf_x101fpn_int8_std_rank_class_int8_box_set.pt'
-    },
-    'x101fpn_fp16_aggressive': {
-        'model_name': 'ResNeXt-101-FPN (FP16 Aggressive)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive',
-        'data_file': 'std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive_box_set.pt'
-    },
+    # 'x101fpn_fp16': {
+    #     'model_name': 'ResNeXt-101-FPN (FP16)',
+    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_std_rank_class_fp16',
+    #     'data_file': 'std_conf_x101fpn_fp16_std_rank_class_fp16_box_set.pt'
+    # },
+    # 'x101fpn_int8': {
+    #     'model_name': 'ResNeXt-101-FPN (INT8)',
+    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_std_rank_class_int8',
+    #     'data_file': 'std_conf_x101fpn_int8_std_rank_class_int8_box_set.pt'
+    # },
+    # 'x101fpn_fp16_aggressive': {
+    #     'model_name': 'ResNeXt-101-FPN (FP16 Aggressive)',
+    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive',
+    #     'data_file': 'std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive_box_set.pt'
+    # },
     'x101fpn_cqr_bdd100k': {
         'model_name': 'ResNeXt-101-FPN (CQR BDD100K)',
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_bdd100k',
@@ -114,8 +114,8 @@ BASE_MODEL_CONFIGS = {
     },
     'x101fpn_int8_aggressive': {
         'model_name': 'ResNeXt-101-FPN (INT8 Aggressive)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_aggressive_std_rank_class',
-        'data_file': 'std_conf_x101fpn_int8_aggressive_std_rank_class_box_set.pt'
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_aggressive_std_rank_class_int8_aggressive',
+        'data_file': 'std_conf_x101fpn_int8_aggressive_std_rank_class_int8_aggressive_box_set.pt'
     }
 }
 

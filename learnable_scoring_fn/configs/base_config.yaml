@@ -31,15 +31,17 @@ model:
       x_101_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_coco/cache_base_model_X_101_FPN
     
     cityscapes:
-      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50_cityscapes
-      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101_cityscapes
-      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101_cityscapes
+      cascade_r_50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_cityscapes/cache_base_model_cascade_mask_rcnn_R_50_FPN_3x
+      r_50_c4: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_cityscapes/cache_base_model_faster_rcnn_R_50_C4_3x
+      r_50_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_cityscapes/cache_base_model_faster_rcnn_R_50_FPN_3x
+      x_101_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_cityscapes/cache_base_model_faster_rcnn_X_101_32x8d_FPN_3x
       # Add more Cityscapes models as needed
     
     bdd100k:
-      resnet50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet50_bdd100k
-      resnet101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnet101_bdd100k
-      resnext101: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_base_model_resnext101_bdd100k
+      cascade_r_50: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_bdd100k/cache_base_model_cascade_mask_rcnn_R_50_FPN_3x
+      r_50_c4: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_bdd100k/cache_base_model_faster_rcnn_R_50_C4_3x
+      r_50_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_bdd100k/cache_base_model_faster_rcnn_R_50_FPN_3x
+      x_101_fpn: /ssd_4TB/divake/conformal-od/learnable_scoring_fn/cache_bdd100k/cache_base_model_faster_rcnn_X_101_32x8d_FPN_3x
       # Add more BDD100K models as needed
   
   # Architecture settings (same for all models)

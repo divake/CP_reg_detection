@@ -8,8 +8,8 @@ import yaml
 from pathlib import Path
 
 
-def load_models_from_config(config_path="learnable_scoring_fn/configs/base_config.yaml"):
-    """Load all model names from base_config.yaml."""
+def load_models_from_config(dataset="coco", config_path="learnable_scoring_fn/configs/base_config.yaml"):
+    """Load model names from base_config.yaml for a specific dataset."""
     # Check if we're in the learnable_scoring_fn directory
     if Path("configs/base_config.yaml").exists():
         config_path = "configs/base_config.yaml"
@@ -20,8 +20,12 @@ def load_models_from_config(config_path="learnable_scoring_fn/configs/base_confi
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Get models from COCO dataset (since names are same for all datasets)
-    models = list(config['model']['cache_dirs']['coco'].keys())
+    # Get models from the specified dataset
+    cache_dirs = config['model']['cache_dirs']
+    if dataset not in cache_dirs:
+        raise ValueError(f"Dataset '{dataset}' not found in config. Available datasets: {list(cache_dirs.keys())}")
+    
+    models = list(cache_dirs[dataset].keys())
     return sorted(models)
 
 
@@ -37,10 +41,6 @@ def generate_commands(
     # Base command template
     base_cmd = f"{python_path} train_size_aware.py"
     
-    # Load models from config
-    models = load_models_from_config()
-    print(f"Found {len(models)} models in base_config.yaml: {', '.join(models)}")
-    
     # Generate commands
     commands = []
     
@@ -52,6 +52,10 @@ def generate_commands(
     
     # Generate commands for each combination
     for dataset in datasets:
+        # Load models specific to this dataset
+        models = load_models_from_config(dataset=dataset)
+        print(f"Found {len(models)} models for {dataset} in base_config.yaml: {', '.join(models)}")
+        
         device = dataset_device_mapping[dataset]
         for model in models:
             cmd_parts = [
@@ -82,13 +86,13 @@ def generate_commands(
     
     print(f"\nGenerated {len(commands)} commands in {output_path}")
     print(f"Datasets: {', '.join(datasets)}")
-    print(f"Models per dataset: {len(models)}")
     print(f"CUDA devices: {', '.join([f'cuda:{d}' for d in cuda_devices])}")
     
     # Show distribution
     print("\nDataset-Device mapping:")
     for dataset, device in dataset_device_mapping.items():
-        print(f"  {dataset} -> cuda:{device}")
+        dataset_models = load_models_from_config(dataset=dataset)
+        print(f"  {dataset} ({len(dataset_models)} models) -> cuda:{device}")
 
 
 def main():
@@ -100,7 +104,7 @@ def main():
     parser.add_argument(
         '--datasets',
         nargs='+',
-        default=['coco'],
+        default=['bdd100k'],
         choices=['coco', 'cityscapes', 'bdd100k'],
         help='Datasets to generate commands for'
     )

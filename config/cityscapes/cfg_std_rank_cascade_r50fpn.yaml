@@ -1,0 +1,125 @@
+########################
+### BASE CONFIG FILE ###
+########################
+
+PROJECT:
+  CODE_DIR: "conformalbb"
+  CONFIG_DIR: "conformalbb/config"
+  CHECKPOINT_DIR: "checkpoints"
+  RESULTS_DIR: "results"
+  OUTPUT_DIR: &outputdir "output"
+  PLOT_DIR: "plots"
+  SEED: &seed 6666666
+
+
+DATASETS:
+  DIR: "data"
+  DATASET:
+    NAME: "cityscapes_val"
+    IMG_DIR: "cityscapes/leftImg8bit/val"
+    ANN_FILE: "cityscapes/gtFine/val"
+    METADATA_FILE: null
+    FORMAT: "cityscapes"
+    # set to BGR for coco, RGB for bdd and cityscapes
+    CHANNELS: &channels "RGB"
+    # set to true for coco, false for bdd and cityscapes
+    FILTER_EMPTY: true
+
+
+DATALOADER:
+  TRAIN:
+    TOTAL_BATCH_SIZE: &batchsize 16
+    ASPECT_RATIO_GROUPING: &aspectratio true 
+    NUM_WORKERS: &num_workers 0
+    COLLATE_FN: &collate null
+  TEST:
+    BATCH_SIZE: 1
+    NUM_WORKERS: *num_workers
+    COLLATE_FN: *collate
+
+
+CALIBRATION:
+  FRACTION: 0.5
+  TRIALS: 100
+  BOX_CORRECTION: "rank_coord"
+  BOX_SET_STRATEGY: "max" 
+  ONE_SIDED_PI: true
+
+
+MODEL:
+  NAME: "Cascade R-CNN R50-FPN"
+  ID: "cascade_r50fpn"
+  LOCAL_CHECKPOINT: true
+  CHECKPOINT_PATH: "/ssd_4TB/divake/conformal-od/checkpoints_variants/cascade_mask_rcnn_R_50_FPN_3x.pkl"
+  FILE: "Misc/cascade_mask_rcnn_R_50_FPN_3x.yaml"
+  DEVICE: &device "cpu"
+  # set to false for EnsConf
+  AP_EVAL: true
+  BOX_MATCHING: "box"
+  IOU_THRESH_TEST: 0.5 
+  CLASS_MATCHING: false
+
+
+  # DETECTRON2 MODEL CONFIG
+  CONFIG:
+    OUTPUT_DIR: *outputdir
+    SEED: *seed
+    INPUT:
+      CROP:
+        ENABLED: false
+        SIZE:
+        - 0.9
+        - 0.9
+        TYPE: "relative_range"
+      FORMAT: *channels
+      MASK_FORMAT: "polygon"
+      MAX_SIZE_TEST: 1333
+      MAX_SIZE_TRAIN: 1333
+      MIN_SIZE_TEST: 800
+      MIN_SIZE_TRAIN:
+      - 640
+      - 672
+      - 704
+      - 736
+      - 768
+      - 800
+      MIN_SIZE_TRAIN_SAMPLING: "choice"
+      RANDOM_FLIP: "horizontal"
+    DATALOADER:
+      ASPECT_RATIO_GROUPING: *aspectratio
+      NUM_WORKERS: *num_workers
+    MODEL:
+      DEVICE: *device
+      MASK_ON: false
+      ROI_HEADS:
+        NAME: CascadeROIHeads
+        IOU_THRESHOLDS: [0.5]
+        NUM_CLASSES: 80
+        SCORE_THRESH_TEST: 0.05
+        NMS_THRESH_TEST: 0.5
+      ROI_BOX_HEAD:
+        CLS_AGNOSTIC_BBOX_REG: True
+      ROI_BOX_CASCADE_HEAD:
+        IOUS: [0.5, 0.6, 0.7]
+        BBOX_REG_WEIGHTS:
+          - [10.0, 10.0, 5.0, 5.0]
+          - [20.0, 20.0, 10.0, 10.0]
+          - [30.0, 30.0, 15.0, 15.0]
+    SOLVER:
+      BASE_LR: 0.02
+      CHECKPOINT_PERIOD: 500
+      IMS_PER_BATCH: *batchsize
+      MAX_ITER: 5000
+
+
+# CITYSCAPES CLASS FILTERING - FIXED!
+CITYSCAPES_COCO_MAPPING:
+  # All 7 Cityscapes categories that actually exist in data
+  VALID_CLASSES: [0, 1, 2, 3, 5, 6, 7]  # person, bicycle, car, motorcycle, bus, train, truck
+  CLASS_NAMES: ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck"]
+  
+# EVALUATION SETTINGS  
+EVALUATION:
+  # Evaluate on all 7 Cityscapes categories with data
+  FILTER_CLASSES: true
+  VALID_CLASS_IDS: [0, 1, 2, 3, 5, 6, 7]
