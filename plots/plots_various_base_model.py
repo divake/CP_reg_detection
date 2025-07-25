@@ -35,68 +35,98 @@ from pathlib import Path
 # CONFIGURATION
 # ============================================================================
 
-# Base model directories and configurations
+# Base model directories and configurations - COCO & BDD100K
 BASE_MODEL_CONFIGS = {
-    'r50c4': {
-        'model_name': 'ResNet-50-C4 (No FPN)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r50c4_std_rank_class',
-        'data_file': 'std_conf_r50c4_std_rank_class_box_set.pt'
-    },
-    'r50fpn': {
-        'model_name': 'ResNet-50-FPN',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r50fpn_std_rank_class',
-        'data_file': 'std_conf_r50fpn_std_rank_class_box_set.pt'
-    },
-    'r101c4': {
-        'model_name': 'ResNet-101-C4 (No FPN)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r101c4_std_rank_class',
-        'data_file': 'std_conf_r101c4_std_rank_class_box_set.pt'
+    # COCO Models
+    'x101fpn': {
+        'model_name': 'ResNeXt-101-FPN',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_std_rank_class',
+        'data_file': 'std_conf_x101fpn_std_rank_class_box_set.pt'
     },
     'r101fpn': {
         'model_name': 'ResNet-101-FPN',
         'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r101fpn_std_rank_class',
         'data_file': 'std_conf_r101fpn_std_rank_class_box_set.pt'
     },
-    'x101fpn': {
-        'model_name': 'ResNeXt-101-FPN',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_std_rank_class',
-        'data_file': 'std_conf_x101fpn_std_rank_class_box_set.pt'
+    'r101c4': {
+        'model_name': 'ResNet-101-C4 (No FPN)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r101c4_std_rank_class',
+        'data_file': 'std_conf_r101c4_std_rank_class_box_set.pt'
     },
-    'x101fpn_bdd100k': {
-        'model_name': 'ResNeXt-101-FPN (BDD100K)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k',
-        'data_file': 'std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k_box_set.pt'
+    'r50fpn': {
+        'model_name': 'ResNet-50-FPN',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r50fpn_std_rank_class',
+        'data_file': 'std_conf_r50fpn_std_rank_class_box_set.pt'
     },
-    # 'x101fpn_fp16': {
-    #     'model_name': 'ResNeXt-101-FPN (FP16)',
-    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_std_rank_class_fp16',
-    #     'data_file': 'std_conf_x101fpn_fp16_std_rank_class_fp16_box_set.pt'
-    # },
-    # 'x101fpn_int8': {
-    #     'model_name': 'ResNeXt-101-FPN (INT8)',
-    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_std_rank_class_int8',
-    #     'data_file': 'std_conf_x101fpn_int8_std_rank_class_int8_box_set.pt'
-    # },
-    # 'x101fpn_fp16_aggressive': {
-    #     'model_name': 'ResNeXt-101-FPN (FP16 Aggressive)',
-    #     'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive',
-    #     'data_file': 'std_conf_x101fpn_fp16_aggressive_std_rank_class_fp16_aggressive_box_set.pt'
-    # },
+    'r50c4': {
+        'model_name': 'ResNet-50-C4 (No FPN)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r50c4_std_rank_class',
+        'data_file': 'std_conf_r50c4_std_rank_class_box_set.pt'
+    },
+    'cascade_r50fpn': {
+        'model_name': 'Cascade R-CNN ResNet-50-FPN',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_cascade_r50fpn_std_rank_class',
+        'data_file': 'std_conf_cascade_r50fpn_std_rank_class_box_set.pt'
+    },
+    'r50fpn_ens': {
+        'model_name': 'ResNet-50-FPN (Ensemble)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/ens_conf_r50fpn_ens_rank_class',
+        'data_file': 'ens_conf_r50fpn_ens_rank_class_box_set.pt'
+    },
+    'x101fpn_cqr': {
+        'model_name': 'ResNeXt-101-FPN (CQR)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/cqr_conf_x101fpn_cqr_rank_class',
+        'data_file': 'cqr_conf_x101fpn_cqr_rank_class_box_set.pt'
+    },
+    
+    # BDD100K Models
     'x101fpn_cqr_bdd100k': {
         'model_name': 'ResNeXt-101-FPN (CQR BDD100K)',
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_bdd100k',
         'data_file': 'cqr_conf_x101fpn_cqr_rank_bdd100k_box_set.pt'
+    },
+    'x101fpn_cqr_cityscapes_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (CQR Cityscapes BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_cityscapes',
+        'data_file': 'cqr_conf_x101fpn_cqr_rank_cityscapes_box_set.pt'
     },
     'x101fpn_ens_bdd100k': {
         'model_name': 'ResNeXt-101-FPN (Ensemble BDD100K)',
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/ens_conf_x101fpn_ens_rank_bdd100k',
         'data_file': 'ens_conf_x101fpn_ens_rank_bdd100k_box_set.pt'
     },
-    'x101fpn_cityscapes': {
-        'model_name': 'ResNeXt-101-FPN (Cityscapes)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_x101fpn_std_rank_class_cityscapes',
-        'data_file': 'std_conf_x101fpn_std_rank_class_cityscapes_box_set.pt'
+    'cascade_r50fpn_bdd100k': {
+        'model_name': 'Cascade R-CNN ResNet-50-FPN (BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_cascade_r50fpn_std_rank_bdd100k_cascade_r50fpn',
+        'data_file': 'std_conf_cascade_r50fpn_std_rank_bdd100k_cascade_r50fpn_box_set.pt'
     },
+    'r50c4_bdd100k': {
+        'model_name': 'ResNet-50-C4 (No FPN BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_r50c4_std_rank_bdd100k_r50c4',
+        'data_file': 'std_conf_r50c4_std_rank_bdd100k_r50c4_box_set.pt'
+    },
+    'r50fpn_bdd100k': {
+        'model_name': 'ResNet-50-FPN (BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_r50fpn_std_rank_bdd100k_r50fpn',
+        'data_file': 'std_conf_r50fpn_std_rank_bdd100k_r50fpn_box_set.pt'
+    },
+    'x101fpn_class_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (Class BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_class_bdd100k',
+        'data_file': 'std_conf_x101fpn_std_rank_class_bdd100k_box_set.pt'
+    },
+    'x101fpn_final_fixed_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (Final Fixed BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k',
+        'data_file': 'std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k_box_set.pt'
+    },
+    'x101fpn_fixed_bdd100k': {
+        'model_name': 'ResNeXt-101-FPN (Fixed BDD100K)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_fixed_bdd100k',
+        'data_file': 'std_conf_x101fpn_std_rank_fixed_bdd100k_box_set.pt'
+    },
+    
+    # Cityscapes Models
     'x101fpn_cqr_cityscapes': {
         'model_name': 'ResNeXt-101-FPN (CQR Cityscapes)',
         'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/cqr_conf_x101fpn_cqr_rank_cityscapes',
@@ -107,15 +137,25 @@ BASE_MODEL_CONFIGS = {
         'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/ens_conf_x101fpn_ens_rank_cityscapes',
         'data_file': 'ens_conf_x101fpn_ens_rank_cityscapes_box_set.pt'
     },
-    'cascade_r50fpn': {
-        'model_name': 'Cascade R-CNN ResNet-50-FPN',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_cascade_r50fpn_std_rank_class',
-        'data_file': 'std_conf_cascade_r50fpn_std_rank_class_box_set.pt'
+    'cascade_r50fpn_cityscapes': {
+        'model_name': 'Cascade R-CNN ResNet-50-FPN (Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_cascade_r50fpn_std_rank_cityscapes_cascade_r50fpn',
+        'data_file': 'std_conf_cascade_r50fpn_std_rank_cityscapes_cascade_r50fpn_box_set.pt'
     },
-    'x101fpn_int8_aggressive': {
-        'model_name': 'ResNeXt-101-FPN (INT8 Aggressive)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_int8_aggressive_std_rank_class_int8_aggressive',
-        'data_file': 'std_conf_x101fpn_int8_aggressive_std_rank_class_int8_aggressive_box_set.pt'
+    'r50c4_cityscapes': {
+        'model_name': 'ResNet-50-C4 (No FPN Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_r50c4_std_rank_cityscapes_r50c4',
+        'data_file': 'std_conf_r50c4_std_rank_cityscapes_r50c4_box_set.pt'
+    },
+    'r50fpn_cityscapes': {
+        'model_name': 'ResNet-50-FPN (Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_r50fpn_std_rank_cityscapes_r50fpn',
+        'data_file': 'std_conf_r50fpn_std_rank_cityscapes_r50fpn_box_set.pt'
+    },
+    'x101fpn_class_cityscapes': {
+        'model_name': 'ResNeXt-101-FPN (Class Cityscapes)',
+        'directory': '/ssd_4TB/divake/conformal-od/output/cityscapes_val/std_conf_x101fpn_std_rank_class_cityscapes',
+        'data_file': 'std_conf_x101fpn_std_rank_class_cityscapes_box_set.pt'
     }
 }
 
@@ -221,11 +261,11 @@ def analyze_all_models():
         dict: Performance data for all models
     """
     print("=" * 80)
-    print("VARIOUS BASE MODEL PERFORMANCE ANALYSIS")
+    print("COMPREHENSIVE BASE MODEL PERFORMANCE ANALYSIS")
     print("=" * 80)
-    print("Analyzing coverage and MPIW for 14 different base models")
+    print("Analyzing coverage and MPIW for different base models across datasets")
     print("Methods: Standard Conformal Prediction (std_conf), CQR (cqr_conf), and Ensemble (ens_conf)")
-    print("Datasets: COCO validation set, BDD100K validation set, Cityscapes validation set")
+    print("Datasets: COCO, BDD100K, and Cityscapes validation sets")
     print()
     
     results = {}
@@ -248,44 +288,57 @@ def analyze_all_models():
 
 def print_performance_summary(results):
     """
-    Print a comprehensive performance summary.
+    Print a comprehensive performance summary with separate tables for each dataset.
     
     Args:
         results (dict): Performance data from analyze_all_models()
     """
     print("=" * 80)
-    print("PERFORMANCE SUMMARY")
+    print("PERFORMANCE SUMMARY BY DATASET")
     print("=" * 80)
     
     if not results:
         print("❌ No data available for analysis!")
         return
     
-    # Header
-    print(f"{'Model':<25} {'Coverage':<15} {'MPIW':<15} {'Trials':<8}")
-    print("-" * 80)
+    # Group results by dataset
+    datasets = {'coco': [], 'bdd100k': [], 'cityscapes': []}
     
-    # Sort models by performance (coverage close to 90%, then by MPIW)
-    sorted_models = []
     for model_id, data in results.items():
-        perf = data['performance']
-        coverage_diff = abs(perf['coverage_mean'] - 0.9)  # Distance from target 90%
-        sorted_models.append((model_id, data, coverage_diff, perf['mpiw_mean']))
+        dataset_type = data['performance']['dataset_type']
+        datasets[dataset_type].append((model_id, data))
     
-    # Sort by coverage difference first, then by MPIW
-    sorted_models.sort(key=lambda x: (x[2], x[3]))
-    
-    # Print results
-    for model_id, data, _, _ in sorted_models:
-        config = data['config']
-        perf = data['performance']
+    # Print tables for each dataset
+    for dataset_name, models in datasets.items():
+        if not models:
+            continue
+            
+        print(f"\n{dataset_name.upper()} DATASET RESULTS:")
+        print("=" * 100)
+        print(f"{'Model':<35} {'Coverage':<35} {'MPIW':<30}")
+        print("-" * 100)
         
-        coverage_str = f"{perf['coverage_mean']:.3f} ± {perf['coverage_std']:.3f}"
-        mpiw_str = f"{perf['mpiw_mean']:.1f} ± {perf['mpiw_std']:.1f}"
+        # Sort models by performance (coverage close to 90%, then by MPIW)
+        sorted_models = []
+        for model_id, data in models:
+            perf = data['performance']
+            coverage_diff = abs(perf['coverage_mean'] - 0.9)  # Distance from target 90%
+            sorted_models.append((model_id, data, coverage_diff, perf['mpiw_mean']))
         
-        print(f"{config['model_name']:<25} {coverage_str:<15} {mpiw_str:<15} {perf['n_trials']:<8}")
-    
-    print("-" * 80)
+        # Sort by coverage difference first, then by MPIW
+        sorted_models.sort(key=lambda x: (x[2], x[3]))
+        
+        # Print results for this dataset
+        for model_id, data, _, _ in sorted_models:
+            config = data['config']
+            perf = data['performance']
+            
+            coverage_str = f"{perf['coverage_mean']:.3f} ± {perf['coverage_std']:.3f} (range: {perf['coverage_min']:.3f} - {perf['coverage_max']:.3f})"
+            mpiw_str = f"{perf['mpiw_mean']:.1f} ± {perf['mpiw_std']:.1f} (range: {perf['mpiw_min']:.1f} - {perf['mpiw_max']:.1f})"
+            
+            print(f"{config['model_name']:<35} {coverage_str:<35} {mpiw_str:<30}")
+        
+        print("-" * 100)
     
     # Detailed statistics
     print("\nDETAILED STATISTICS:")
@@ -382,7 +435,7 @@ def main():
     print("• Lower MPIW = tighter prediction intervals (better)")
     print("• Coverage should be close to 90% (target)")
     print("• All models use standard conformal prediction method")
-    print("• Results based on COCO and BDD100K validation sets")
+    print("• Results based on COCO, BDD100K, and Cityscapes validation sets")
     print("=" * 80)
 
 if __name__ == "__main__":

@@ -184,7 +184,7 @@ class LabelSet:
                         ) = metrics.label_stratified_coverage(label_set, filtered_class_idx, calib_mask, ist)
                     else:
                         # Class not in valid classes, set default values
-                        cov_set_area = torch.zeros(5)  # Default size bins
+                        cov_set_area = torch.zeros(3)  # Default size bins (3 bins as per metrics.py)
                         cov_set_iou = torch.zeros(3)   # Default IoU bins
                         cov_set_cl = torch.zeros(2)    # Default class bins
                         mask_cl = torch.zeros(label_set.size(0), dtype=torch.bool)

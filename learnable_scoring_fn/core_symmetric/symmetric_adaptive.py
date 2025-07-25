@@ -17,6 +17,7 @@ from .losses.symmetric_loss import SymmetricAdaptiveLoss
 from .calibration.tau_calibration import TauCalibrator
 from .utils.logging import AdaptiveConformalLogger
 from .utils.visualization import plot_training_results, plot_tau_evolution
+from .utils.visualization import create_all_plots
 
 # Import feature extraction from parent
 import sys
@@ -171,6 +172,178 @@ def compute_size_stratified_metrics(
             }
     
     return final_results
+
+
+def save_incremental_results(
+    history: Dict,
+    experiment_dir: Path,
+    config: Dict,
+    epoch: int,
+    current_tau: float,
+    size_metrics: Dict,
+    model_name: str = "symmetric_adaptive"
+) -> None:
+    """Save all standard results files incrementally after each epoch."""
+    print(f"\n💾 Saving incremental results for epoch {epoch}...")
+    try:
+        # Extract metrics from history
+        val_coverages = history.get('coverage_rate', history.get('val_coverage', []))
+        val_mpiws = history.get('avg_mpiw', history.get('val_mpiw', []))
+        val_size_results = history.get('size_metrics', [])
+        train_losses = history.get('train_loss', [])
+        val_losses = history.get('total', history.get('val_loss', []))
+        tau_history = history.get('tau', history.get('tau_history', []))
+        
+        # Calculate comprehensive statistics
+        def compute_stats(data):
+            if not data:
+                return {}
+            arr = np.array(data)
+            return {
+                'mean': float(np.mean(arr)),
+                'std': float(np.std(arr)),
+                'min': float(np.min(arr)),
+                'max': float(np.max(arr))
+            }
+        
+        # Overall statistics
+        coverage_stats = compute_stats(val_coverages)
+        mpiw_stats = compute_stats(val_mpiws)
+        
+        # Size-stratified statistics
+        size_stats_final = {}
+        for size_name in ['small', 'medium', 'large']:
+            coverages = []
+            mpiws = []
+            counts = []
+            for epoch_results in val_size_results:
+                if isinstance(epoch_results, dict) and size_name in epoch_results:
+                    coverages.append(epoch_results[size_name]['coverage'])
+                    mpiws.append(epoch_results[size_name]['mpiw'])
+                    counts.append(epoch_results[size_name].get('count', 0))
+            
+            size_stats_final[size_name] = {
+                'coverage': compute_stats(coverages),
+                'mpiw': compute_stats(mpiws),
+                'sample_count': int(np.mean(counts)) if counts else 0
+            }
+        
+        # 1. Save comprehensive_results.json
+        comprehensive_results = {
+            'metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'model_name': config['model']['base_model'],
+                'dataset': config['dataset']['name'],
+                'method': 'size_aware_symmetric_adaptive',
+                'seed': config['experiment']['seed'],
+                'training_time_seconds': epoch * 60.0,  # Approximate
+                'output_directory': str(experiment_dir)
+            },
+            'configuration': {
+                'target_coverage': config['calibration']['target_coverage'],
+                'min_coverage': config['calibration']['min_coverage'],
+                'max_coverage': config['calibration']['max_coverage'],
+                'size_targets': config['loss'].get('size_targets', {}),
+                'epochs': config['training']['epochs'],
+                'batch_size': config['training']['batch_size'],
+                'learning_rate': config['training']['learning_rate'],
+                'hidden_dims': config['model']['architecture']['hidden_dims'],
+                'lambda_efficiency': config['loss']['lambda_efficiency'],
+                'tau_smoothing': config['calibration']['tau_smoothing'],
+                'cache_directory': str(Path(config['dataset']['cache_dir']).name)
+            },
+            'summary': {
+                'coverage': {
+                    'mean': coverage_stats.get('mean', 0),
+                    'std': coverage_stats.get('std', 0),
+                    'min': coverage_stats.get('min', 0),
+                    'max': coverage_stats.get('max', 0),
+                    'range_string': f"{coverage_stats.get('mean', 0):.3f} ± {coverage_stats.get('std', 0):.3f}"
+                },
+                'mpiw': {
+                    'mean': mpiw_stats.get('mean', 0),
+                    'std': mpiw_stats.get('std', 0),
+                    'min': mpiw_stats.get('min', 0),
+                    'max': mpiw_stats.get('max', 0),
+                    'range_string': f"{mpiw_stats.get('mean', 0):.1f} ± {mpiw_stats.get('std', 0):.1f}"
+                },
+                'n_epochs': len(val_coverages),
+                'n_classes': config.get('dataset', {}).get('num_classes', 80)
+            },
+            'size_stratified_results': size_stats_final,
+            'best_epoch': {
+                'epoch': int(np.argmin(val_mpiws) + 1) if val_mpiws else 0,
+                'coverage': float(val_coverages[np.argmin(val_mpiws)]) if val_mpiws else 0,
+                'mpiw': float(np.min(val_mpiws)) if val_mpiws else 0
+            },
+            'final_epoch': {
+                'epoch': len(val_coverages),
+                'coverage': float(val_coverages[-1]) if val_coverages else 0,
+                'mpiw': float(val_mpiws[-1]) if val_mpiws else 0,
+                'tau': float(current_tau)
+            },
+            'training_history': history,
+            'paper_ready_text': {
+                'main_result': f"Coverage: {coverage_stats.get('mean', 0):.3f} ± {coverage_stats.get('std', 0):.3f}\n" +
+                              f"MPIW: {mpiw_stats.get('mean', 0):.1f} ± {mpiw_stats.get('std', 0):.1f}"
+            }
+        }
+        
+        with open(experiment_dir / 'comprehensive_results.json', 'w') as f:
+            json.dump(comprehensive_results, f, indent=2)
+        
+        # 2. Update final_results.json
+        final_results = {
+            'experiment_name': experiment_dir.name,
+            'final_tau': current_tau,
+            'final_coverage': val_coverages[-1] if val_coverages else 0,
+            'final_mpiw': val_mpiws[-1] if val_mpiws else 0,
+            'best_model_saved': (experiment_dir / 'models' / 'best_model.pt').exists(),
+            'total_epochs': epoch,
+            'size_metrics': size_metrics
+        }
+        
+        with open(experiment_dir / "final_results.json", 'w') as f:
+            json.dump(final_results, f, indent=2)
+        
+        # 3. Save config.yaml and config_used.yaml
+        import yaml
+        for config_name in ["config.yaml", "config_used.yaml"]:
+            config_path = experiment_dir / config_name
+            if not config_path.exists():
+                with open(config_path, 'w') as f:
+                    yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        
+        # 4. Save results summary text file
+        summary_path = experiment_dir / 'results_summary.txt'
+        with open(summary_path, 'w') as f:
+            f.write("="*80 + "\n")
+            f.write("SIZE-AWARE SYMMETRIC ADAPTIVE CONFORMAL PREDICTION RESULTS\n")
+            f.write("="*80 + "\n\n")
+            f.write(f"Model: {config['model']['base_model']}\n")
+            f.write(f"Dataset: {config['dataset']['name']}\n")
+            f.write(f"Current Epoch: {epoch}\n")
+            f.write(f"Training Time: {epoch * 60.0:.1f} seconds (approx)\n\n")
+            f.write("MAIN RESULTS:\n")
+            f.write("-"*40 + "\n")
+            f.write(comprehensive_results['paper_ready_text']['main_result'] + "\n\n")
+            f.write("SIZE-STRATIFIED RESULTS:\n")
+            f.write("-"*40 + "\n")
+            for size, stats in size_stats_final.items():
+                f.write(f"{size.capitalize():<8}: Coverage: {stats['coverage'].get('mean', 0):.3f}, ")
+                f.write(f"MPIW: {stats['mpiw'].get('mean', 0):.1f}, n={stats['sample_count']}\n")
+            f.write("\n" + "="*80 + "\n")
+        
+        # 5. Generate all standard plots
+        create_all_plots(history, experiment_dir, model_name=model_name)
+        
+        print(f"✅ Incremental save complete for epoch {epoch}")
+            
+    except Exception as e:
+        print(f"⚠️  Warning: Could not save incremental results for epoch {epoch}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't fail training if incremental save fails
 
 
 def train_symmetric_adaptive(
@@ -503,6 +676,17 @@ def train_symmetric_adaptive(
         
         # Visualization
         logger.create_visualization(epoch)
+        
+        # Save incremental results after each epoch
+        save_incremental_results(
+            history=history,
+            experiment_dir=experiment_dir,
+            config=config,
+            epoch=epoch,
+            current_tau=current_tau,
+            size_metrics=size_metrics,
+            model_name='symmetric_adaptive'
+        )
         
         # Early stopping check based on stable coverage
         if epoch > config['training'].get('warmup_epochs', 5):

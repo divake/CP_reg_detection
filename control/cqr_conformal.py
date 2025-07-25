@@ -62,6 +62,17 @@ class CQRConformal(RiskControl):
 
         self.label_alpha = args.label_alpha
         self.label_set_generator = get_label_set_generator(cfg, args, logger)
+        
+        # BDD100K and Cityscapes class filtering support - pass to label set generator
+        if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
+            self.label_set_generator.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"CQRConformal: Using BDD100K class filtering for {len(self.label_set_generator.valid_classes)} valid classes: {self.label_set_generator.valid_classes}")
+        elif hasattr(cfg, 'CITYSCAPES_COCO_MAPPING') and 'VALID_CLASSES' in cfg.CITYSCAPES_COCO_MAPPING:
+            self.label_set_generator.valid_classes = cfg.CITYSCAPES_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"CQRConformal: Using Cityscapes class filtering for {len(self.label_set_generator.valid_classes)} valid classes: {self.label_set_generator.valid_classes}")
+        else:
+            self.label_set_generator.valid_classes = None
+            logger.info("CQRConformal: No class filtering applied - using all classes")
 
     def set_collector(self, nr_class: int, nr_img: int, dict_fields: list = []):
         """
@@ -120,7 +131,8 @@ class CQRConformal(RiskControl):
                 pred_box = pred_ist.pred_boxes
                 pred_class = pred_ist.pred_classes
                 pred_score = pred_ist.scores
-                pred_score_all = pred_ist.scores_all
+                # Handle models that don't have scores_all (e.g., Cascade R-CNN)
+                pred_score_all = pred_ist.scores_all if hasattr(pred_ist, 'scores_all') else None
                 pred_box_q = [pred_ist.get(f"pred_boxes_{q}") for q in self.q_str]
 
                 # Collect and store AP eval info

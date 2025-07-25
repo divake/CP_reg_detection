@@ -262,3 +262,5 @@ learnable_scoring_fn/commands_next.txt
 learnable_scoring_fn/commands_next_plus.txt
 learnable_scoring_fn/commands_plus.txt
 cache_commands*.txt
+run_error_log copy.txt
+learnable_scoring_fn/run_error_log_commands_plus.txt

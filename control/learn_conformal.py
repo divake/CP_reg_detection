@@ -59,6 +59,17 @@ class LearnConformal(RiskControl):
 
         self.label_alpha = args.label_alpha
         self.label_set_generator = get_label_set_generator(cfg, args, logger)
+        
+        # BDD100K and Cityscapes class filtering support - pass to label set generator
+        if hasattr(cfg, 'BDD100K_COCO_MAPPING') and 'VALID_CLASSES' in cfg.BDD100K_COCO_MAPPING:
+            self.label_set_generator.valid_classes = cfg.BDD100K_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"LearnConformal: Using BDD100K class filtering for {len(self.label_set_generator.valid_classes)} valid classes: {self.label_set_generator.valid_classes}")
+        elif hasattr(cfg, 'CITYSCAPES_COCO_MAPPING') and 'VALID_CLASSES' in cfg.CITYSCAPES_COCO_MAPPING:
+            self.label_set_generator.valid_classes = cfg.CITYSCAPES_COCO_MAPPING.VALID_CLASSES
+            logger.info(f"LearnConformal: Using Cityscapes class filtering for {len(self.label_set_generator.valid_classes)} valid classes: {self.label_set_generator.valid_classes}")
+        else:
+            self.label_set_generator.valid_classes = None
+            logger.info("LearnConformal: No class filtering applied - using all classes")
 
         # Learnable scoring model path (can be configured)
         self.learnable_model_path = getattr(args, 'learnable_model_path', None)
@@ -141,8 +152,9 @@ class LearnConformal(RiskControl):
                 pred_box = pred_ist.pred_boxes
                 pred_class = pred_ist.pred_classes
                 pred_score = pred_ist.scores
-                pred_score_all = pred_ist.scores_all
-                pred_logits_all = pred_ist.logits_all
+                # Handle models that don't have scores_all and logits_all (e.g., Cascade R-CNN)
+                pred_score_all = pred_ist.scores_all if hasattr(pred_ist, 'scores_all') else None
+                pred_logits_all = pred_ist.logits_all if hasattr(pred_ist, 'logits_all') else None
 
                 # Collect and store AP eval info
                 if self.ap_eval:

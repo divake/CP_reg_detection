@@ -135,9 +135,9 @@ class DataCollector:
         self.ist_list[c]["pred_area"] += pred_box[idx].area().tolist()
 
         self.ist_list[c]["pred_score"] += pred_score[idx].tolist()
-        if pred_score_all is not None:
+        if pred_score_all is not None and len(pred_score_all) > 0:
             self.ist_list[c]["pred_score_all"] += pred_score_all[idx].tolist()
-        if pred_logits_all is not None:
+        if pred_logits_all is not None and len(pred_logits_all) > 0:
             self.ist_list[c]["pred_logits_all"] += pred_logits_all[idx].tolist()
 
         # Ensure boxes are on the same device before computing IoU

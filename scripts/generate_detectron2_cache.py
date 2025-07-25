@@ -202,8 +202,8 @@ MAX_TRAIN_IMAGES = None  # None for full COCO train set (118k images)
 MAX_VAL_IMAGES = None    # None for full COCO val set (5k images)
 
 # Model Inference Configuration
-CONFIDENCE_THRESHOLD = 0.3  # Minimum confidence for predictions (0.05-0.5)
-IOU_THRESHOLD = 0.3         # IoU threshold for matching predictions to GT (0.3-0.5)
+CONFIDENCE_THRESHOLD = 0.1  # Minimum confidence for predictions (0.05-0.5)
+IOU_THRESHOLD = 0.5         # IoU threshold for matching predictions to GT (0.3-0.5)
 
 # Device Configuration
 DEVICE = "auto"  # "auto", "cuda", or "cpu"
@@ -274,7 +274,7 @@ class Detectron2CacheGenerator:
     
     def __init__(self, checkpoint_path: str, coco_data_dir: str, output_dir: str, 
                  device: str = "auto", confidence_threshold: float = 0.1,
-                 iou_threshold: float = 0.3):
+                 iou_threshold: float = 0.3, dataset_name: str = "coco"):
         """
         Initialize cache generator.
         
@@ -285,12 +285,29 @@ class Detectron2CacheGenerator:
             device: Device to use ("auto", "cuda", "cpu")
             confidence_threshold: Minimum confidence threshold for predictions
             iou_threshold: IoU threshold for matching predictions to ground truth
+            dataset_name: Name of dataset being processed
         """
         self.checkpoint_path = checkpoint_path
         self.coco_data_dir = Path(coco_data_dir)
         self.output_dir = Path(output_dir)
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
+        self.dataset_name = dataset_name
+        
+        # Define Cityscapes to COCO mapping
+        # Cityscapes contiguous IDs (0-7) to COCO class IDs
+        self.cityscapes_to_coco_map = {
+            0: 0,  # person → person
+            1: 0,  # rider → person (both map to same COCO class)
+            2: 2,  # car → car
+            3: 7,  # truck → truck
+            4: 5,  # bus → bus
+            5: 6,  # train → train
+            6: 3,  # motorcycle → motorcycle
+            7: 1,  # bicycle → bicycle
+        }
+        # COCO classes that Cityscapes maps to
+        self.cityscapes_valid_coco_classes = list(set(self.cityscapes_to_coco_map.values()))  # [0, 1, 2, 3, 5, 6, 7]
         
         # Auto-detect device
         if device == "auto":
@@ -658,6 +675,16 @@ class Detectron2CacheGenerator:
                 pred_scores = instances.scores.cpu().numpy()
                 pred_classes = instances.pred_classes.cpu().numpy()
                 
+                # Filter predictions for Cityscapes - only keep valid COCO classes
+                if self.dataset_name == "cityscapes":
+                    valid_mask = np.isin(pred_classes, self.cityscapes_valid_coco_classes)
+                    pred_boxes = pred_boxes[valid_mask]
+                    pred_scores = pred_scores[valid_mask]
+                    pred_classes = pred_classes[valid_mask]
+                    
+                    if len(pred_boxes) == 0:
+                        continue
+                
                 # Create prediction dictionary
                 pred_dict = {
                     'pred_coords': pred_boxes,
@@ -672,6 +699,24 @@ class Detectron2CacheGenerator:
                 gt = annotations_to_instances(record["annotations"], (record["height"], record["width"]))
                 gt_boxes = gt.gt_boxes.tensor.numpy()
                 gt_classes = gt.gt_classes.numpy()
+                
+                # Process ground truth for Cityscapes
+                if self.dataset_name == "cityscapes":
+                    # Detectron2's cityscapes loader returns contiguous IDs (0-7)
+                    # We need to map them to COCO IDs
+                    mapped_gt_classes = []
+                    valid_gt_indices = []
+                    
+                    for i, gt_class in enumerate(gt_classes):
+                        if gt_class in self.cityscapes_to_coco_map:
+                            mapped_gt_classes.append(self.cityscapes_to_coco_map[gt_class])
+                            valid_gt_indices.append(i)
+                    
+                    if len(valid_gt_indices) == 0:
+                        continue
+                        
+                    gt_boxes = gt_boxes[valid_gt_indices]
+                    gt_classes = np.array(mapped_gt_classes)
                 
                 gt_dict = {
                     'gt_coords': gt_boxes,
@@ -1377,7 +1422,8 @@ def main():
         output_dir=OUTPUT_DIR,
         device=DEVICE,
         confidence_threshold=CONFIDENCE_THRESHOLD,
-        iou_threshold=IOU_THRESHOLD
+        iou_threshold=IOU_THRESHOLD,
+        dataset_name=dataset_name
     )
     
     # Generate cache

@@ -116,11 +116,15 @@ class EnsConformal(RiskControl):
                 pred_scores.append(ist.scores.tolist())
                 
                 # CRITICAL FIX: Apply class filtering for BDD100K
-                if hasattr(self, 'valid_classes') and self.valid_classes is not None:
-                    scores_all_filtered = ist.scores_all[:, self.valid_classes]
-                    pred_score_all.append(scores_all_filtered.tolist())
+                if hasattr(ist, 'scores_all'):
+                    if hasattr(self, 'valid_classes') and self.valid_classes is not None:
+                        scores_all_filtered = ist.scores_all[:, self.valid_classes]
+                        pred_score_all.append(scores_all_filtered.tolist())
+                    else:
+                        pred_score_all.append(ist.scores_all.tolist())
                 else:
-                    pred_score_all.append(ist.scores_all.tolist())
+                    # Handle models that don't have scores_all (e.g., Cascade R-CNN)
+                    pred_score_all.append(None)
 
             # wbf, modified to also return ensemble uncertainty
             boxes, scores, score_all, classes, unc = ensemble_boxes_wbf.weighted_boxes_fusion(
