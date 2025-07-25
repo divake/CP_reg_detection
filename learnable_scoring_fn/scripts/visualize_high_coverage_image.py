@@ -107,24 +107,31 @@ def create_high_coverage_visualization(image_path, predictor, calibrated_model,
     pred_scores = instances.scores
     pred_classes = instances.pred_classes
     
-    # Handle both COCO and BDD100K datasets
+    # Handle COCO, BDD100K, and Cityscapes datasets
     if "bdd100k" in image_path:
         # Load BDD100K annotations
         bdd_ann_file = "/ssd_4TB/divake/conformal-od/data/bdd100k/labels/det_val.json"
         with open(bdd_ann_file, 'r') as f:
             bdd_data = json.load(f)
+    elif "cityscapes" in image_path:
+        # Load Cityscapes annotations
+        cityscapes_ann_file = "/ssd_4TB/divake/conformal-od/data/cityscapes/cityscapes_val_coco_format.json"
+        with open(cityscapes_ann_file, 'r') as f:
+            cityscapes_data = json.load(f)
         
-        # Find image ID
+        # Find image ID by filename
         img_id = None
-        for img_info in bdd_data['images']:
-            if img_info['file_name'] == img_name:
+        base_name = Path(img_name).stem  # Get base name without extension
+        
+        for img_info in cityscapes_data['images']:
+            if base_name in img_info['file_name'] or img_info['file_name'] == f"{base_name}.png":
                 img_id = img_info['id']
                 break
         
         # Get annotations
         anns = []
         if img_id:
-            for ann in bdd_data['annotations']:
+            for ann in cityscapes_data['annotations']:
                 if ann['image_id'] == img_id:
                     anns.append(ann)
     else:
@@ -140,8 +147,24 @@ def create_high_coverage_visualization(image_path, predictor, calibrated_model,
     # Get class names
     class_names = util.get_coco_classes()
     
-    # Filter predictions
-    high_conf_mask = pred_scores >= score_threshold
+    # Filter predictions by score and dataset-specific classes
+    if "bdd100k" in image_path:
+        # BDD100K to COCO class mapping
+        bdd_coco_mapping = [0, 1, 2, 3, 5, 6, 7, 9, 11]
+        valid_mask = torch.zeros(len(pred_classes), dtype=torch.bool)
+        for valid_class in bdd_coco_mapping:
+            valid_mask |= (pred_classes == valid_class)
+        high_conf_mask = (pred_scores >= score_threshold) & valid_mask
+    elif "cityscapes" in image_path:
+        # Cityscapes to COCO class mapping
+        cityscapes_coco_mapping = [0, 1, 2, 3, 5, 6, 7]
+        valid_mask = torch.zeros(len(pred_classes), dtype=torch.bool)
+        for valid_class in cityscapes_coco_mapping:
+            valid_mask |= (pred_classes == valid_class)
+        high_conf_mask = (pred_scores >= score_threshold) & valid_mask
+    else:
+        high_conf_mask = pred_scores >= score_threshold
+    
     filtered_instances = Instances((img_h, img_w))
     filtered_instances.pred_boxes = Boxes(pred_boxes_tensor[high_conf_mask])
     filtered_instances.scores = pred_scores[high_conf_mask]
@@ -180,6 +203,12 @@ def create_high_coverage_visualization(image_path, predictor, calibrated_model,
     gt_boxes_tensor = Boxes(torch.tensor(gt_boxes, dtype=torch.float32)) if gt_boxes else Boxes(torch.zeros((0, 4)))
     
     print(f"Ground truth objects: {len(gt_boxes)}")
+    if ("bdd100k" in image_path or "cityscapes" in image_path) and len(gt_boxes) == 0:
+        print(f"Debug: Image ID found: {img_id}")
+        if "bdd100k" in image_path:
+            print(f"Debug: Total annotations in file: {len(bdd_data.get('annotations', []))}")
+        else:
+            print(f"Debug: Total annotations in file: {len(cityscapes_data.get('annotations', []))}")
     
     # Prepare image dict for plot_util
     img_dict = {
