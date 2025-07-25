@@ -11,6 +11,7 @@ import numpy as np
 from pathlib import Path
 import cv2
 from pycocotools.coco import COCO
+import json
 
 # Add paths
 sys.path.append("/ssd_4TB/divake/conformal-od")
@@ -106,14 +107,35 @@ def create_high_coverage_visualization(image_path, predictor, calibrated_model,
     pred_scores = instances.scores
     pred_classes = instances.pred_classes
     
-    # Load COCO metadata
-    coco_ann_file = "/ssd_4TB/divake/conformal-od/data/coco/annotations/instances_val2017.json"
-    coco = COCO(coco_ann_file)
-    
-    # Get ground truth
-    img_id = int(img_name.lstrip('0'))
-    ann_ids = coco.getAnnIds(imgIds=img_id)
-    anns = coco.loadAnns(ann_ids)
+    # Handle both COCO and BDD100K datasets
+    if "bdd100k" in image_path:
+        # Load BDD100K annotations
+        bdd_ann_file = "/ssd_4TB/divake/conformal-od/data/bdd100k/labels/det_val.json"
+        with open(bdd_ann_file, 'r') as f:
+            bdd_data = json.load(f)
+        
+        # Find image ID
+        img_id = None
+        for img_info in bdd_data['images']:
+            if img_info['file_name'] == img_name:
+                img_id = img_info['id']
+                break
+        
+        # Get annotations
+        anns = []
+        if img_id:
+            for ann in bdd_data['annotations']:
+                if ann['image_id'] == img_id:
+                    anns.append(ann)
+    else:
+        # Load COCO metadata
+        coco_ann_file = "/ssd_4TB/divake/conformal-od/data/coco/annotations/instances_val2017.json"
+        coco = COCO(coco_ann_file)
+        
+        # Get ground truth
+        img_id = int(img_name.lstrip('0'))
+        ann_ids = coco.getAnnIds(imgIds=img_id)
+        anns = coco.loadAnns(ann_ids)
     
     # Get class names
     class_names = util.get_coco_classes()
@@ -217,22 +239,27 @@ def main():
     
     predictor = DefaultPredictor(cfg)
     
-    # Best high coverage images from our search
+    # Best high coverage images from BDD100K search
     high_coverage_images = [
         {
-            "name": "000000222458",  # 100% coverage, 8/8 objects
-            "path": "/ssd_4TB/divake/conformal-od/data/coco/val2017/000000222458.jpg",
-            "output": "high_coverage_100_percent_8objects.jpg"
+            "name": "b98e3a45-608c1fb2",  # 100% coverage, 2/2 objects
+            "path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b98e3a45-608c1fb2.jpg",
+            "output": "bdd100k_cqr_2objects.jpg"
         },
         {
-            "name": "000000224222",  # 100% coverage, 4/4 objects
-            "path": "/ssd_4TB/divake/conformal-od/data/coco/val2017/000000224222.jpg",
-            "output": "high_coverage_100_percent_4objects.jpg"
+            "name": "c93310c6-1224728c",  # 100% coverage, 3/3 objects
+            "path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c93310c6-1224728c.jpg",
+            "output": "bdd100k_cqr_3objects.jpg"
         },
         {
-            "name": "000000573626",  # 100% coverage, 3/3 objects
-            "path": "/ssd_4TB/divake/conformal-od/data/coco/val2017/000000573626.jpg",
-            "output": "high_coverage_100_percent_3objects.jpg"
+            "name": "b5fe17dd-b6648364",  # 100% coverage, 5/5 objects
+            "path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b5fe17dd-b6648364.jpg",
+            "output": "bdd100k_cqr_5objects.jpg"
+        },
+        {
+            "name": "c46cdbf7-7e30902e",  # 100% coverage, 7/7 objects
+            "path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c46cdbf7-7e30902e.jpg",
+            "output": "bdd100k_cqr_7objects.jpg"
         }
     ]
     

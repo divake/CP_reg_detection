@@ -43,16 +43,6 @@ BASE_MODEL_CONFIGS = {
         'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_x101fpn_std_rank_class',
         'data_file': 'std_conf_x101fpn_std_rank_class_box_set.pt'
     },
-    'r101fpn': {
-        'model_name': 'ResNet-101-FPN',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r101fpn_std_rank_class',
-        'data_file': 'std_conf_r101fpn_std_rank_class_box_set.pt'
-    },
-    'r101c4': {
-        'model_name': 'ResNet-101-C4 (No FPN)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r101c4_std_rank_class',
-        'data_file': 'std_conf_r101c4_std_rank_class_box_set.pt'
-    },
     'r50fpn': {
         'model_name': 'ResNet-50-FPN',
         'directory': '/ssd_4TB/divake/conformal-od/output/coco_val/std_conf_r50fpn_std_rank_class',
@@ -85,11 +75,6 @@ BASE_MODEL_CONFIGS = {
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_bdd100k',
         'data_file': 'cqr_conf_x101fpn_cqr_rank_bdd100k_box_set.pt'
     },
-    'x101fpn_cqr_cityscapes_bdd100k': {
-        'model_name': 'ResNeXt-101-FPN (CQR Cityscapes BDD100K)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/cqr_conf_x101fpn_cqr_rank_cityscapes',
-        'data_file': 'cqr_conf_x101fpn_cqr_rank_cityscapes_box_set.pt'
-    },
     'x101fpn_ens_bdd100k': {
         'model_name': 'ResNeXt-101-FPN (Ensemble BDD100K)',
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/ens_conf_x101fpn_ens_rank_bdd100k',
@@ -109,16 +94,6 @@ BASE_MODEL_CONFIGS = {
         'model_name': 'ResNet-50-FPN (BDD100K)',
         'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_r50fpn_std_rank_bdd100k_r50fpn',
         'data_file': 'std_conf_r50fpn_std_rank_bdd100k_r50fpn_box_set.pt'
-    },
-    'x101fpn_class_bdd100k': {
-        'model_name': 'ResNeXt-101-FPN (Class BDD100K)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_class_bdd100k',
-        'data_file': 'std_conf_x101fpn_std_rank_class_bdd100k_box_set.pt'
-    },
-    'x101fpn_final_fixed_bdd100k': {
-        'model_name': 'ResNeXt-101-FPN (Final Fixed BDD100K)',
-        'directory': '/ssd_4TB/divake/conformal-od/output/bdd100k_val/std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k',
-        'data_file': 'std_conf_x101fpn_std_rank_FINAL_FIXED_bdd100k_box_set.pt'
     },
     'x101fpn_fixed_bdd100k': {
         'model_name': 'ResNeXt-101-FPN (Fixed BDD100K)',

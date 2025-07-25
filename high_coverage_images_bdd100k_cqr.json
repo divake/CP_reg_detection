@@ -1,0 +1,230 @@
+[
+  {
+    "image_name": "c1fdd182-89c4beb5.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c1fdd182-89c4beb5.jpg",
+    "total_predictions": 1,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b98e3a45-608c1fb2.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b98e3a45-608c1fb2.jpg",
+    "total_predictions": 3,
+    "matched_predictions": 2,
+    "covered_predictions": 2,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c20ae70f-0e43133b.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c20ae70f-0e43133b.jpg",
+    "total_predictions": 2,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c93310c6-1224728c.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c93310c6-1224728c.jpg",
+    "total_predictions": 5,
+    "matched_predictions": 3,
+    "covered_predictions": 3,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c46cdbf7-7e30902e.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c46cdbf7-7e30902e.jpg",
+    "total_predictions": 11,
+    "matched_predictions": 7,
+    "covered_predictions": 7,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b1e6efc0-2552cc5d.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b1e6efc0-2552cc5d.jpg",
+    "total_predictions": 3,
+    "matched_predictions": 3,
+    "covered_predictions": 3,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c787a6cc-5bd5e933.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c787a6cc-5bd5e933.jpg",
+    "total_predictions": 3,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c7c6a4c4-e596d6ca.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c7c6a4c4-e596d6ca.jpg",
+    "total_predictions": 2,
+    "matched_predictions": 2,
+    "covered_predictions": 2,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c593b804-4c08d1a1.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c593b804-4c08d1a1.jpg",
+    "total_predictions": 4,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b5fe17dd-b6648364.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b5fe17dd-b6648364.jpg",
+    "total_predictions": 8,
+    "matched_predictions": 5,
+    "covered_predictions": 5,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "bac52b21-f294dffd.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/bac52b21-f294dffd.jpg",
+    "total_predictions": 11,
+    "matched_predictions": 8,
+    "covered_predictions": 8,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b1c81faa-3df17267.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b1c81faa-3df17267.jpg",
+    "total_predictions": 5,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b6aa41ba-768fdf21.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b6aa41ba-768fdf21.jpg",
+    "total_predictions": 5,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "bafacab2-a1bafb37.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/bafacab2-a1bafb37.jpg",
+    "total_predictions": 9,
+    "matched_predictions": 4,
+    "covered_predictions": 4,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "b54c065e-8b13cfe7.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/b54c065e-8b13cfe7.jpg",
+    "total_predictions": 5,
+    "matched_predictions": 4,
+    "covered_predictions": 4,
+    "coverage_rate": 1.0,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c6dfbd67-2c7061bf.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c6dfbd67-2c7061bf.jpg",
+    "total_predictions": 19,
+    "matched_predictions": 16,
+    "covered_predictions": 15,
+    "coverage_rate": 0.9375,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c07e5e33-7aeda19c.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c07e5e33-7aeda19c.jpg",
+    "total_predictions": 18,
+    "matched_predictions": 14,
+    "covered_predictions": 13,
+    "coverage_rate": 0.9285714285714286,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c43c290b-61f94939.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c43c290b-61f94939.jpg",
+    "total_predictions": 12,
+    "matched_predictions": 12,
+    "covered_predictions": 11,
+    "coverage_rate": 0.9166666666666666,
+    "image_size": [
+      1280,
+      720
+    ]
+  },
+  {
+    "image_name": "c9ece337-21d7e75e.jpg",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/bdd100k/images/100k/val/c9ece337-21d7e75e.jpg",
+    "total_predictions": 11,
+    "matched_predictions": 10,
+    "covered_predictions": 9,
+    "coverage_rate": 0.9,
+    "image_size": [
+      1280,
+      720
+    ]
+  }
+]
