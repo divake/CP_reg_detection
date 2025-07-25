@@ -1,0 +1,74 @@
+[
+  {
+    "image_name": "lindau_000050_000019_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/lindau/lindau_000050_000019_leftImg8bit.png",
+    "total_predictions": 1,
+    "matched_predictions": 1,
+    "covered_predictions": 1,
+    "coverage_rate": 1.0,
+    "image_size": [
+      2048,
+      1024
+    ]
+  },
+  {
+    "image_name": "lindau_000053_000019_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/lindau/lindau_000053_000019_leftImg8bit.png",
+    "total_predictions": 4,
+    "matched_predictions": 3,
+    "covered_predictions": 3,
+    "coverage_rate": 1.0,
+    "image_size": [
+      2048,
+      1024
+    ]
+  },
+  {
+    "image_name": "lindau_000058_000019_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/lindau/lindau_000058_000019_leftImg8bit.png",
+    "total_predictions": 5,
+    "matched_predictions": 4,
+    "covered_predictions": 4,
+    "coverage_rate": 1.0,
+    "image_size": [
+      2048,
+      1024
+    ]
+  },
+  {
+    "image_name": "munster_000113_000019_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/munster/munster_000113_000019_leftImg8bit.png",
+    "total_predictions": 9,
+    "matched_predictions": 8,
+    "covered_predictions": 7,
+    "coverage_rate": 0.875,
+    "image_size": [
+      2048,
+      1024
+    ]
+  },
+  {
+    "image_name": "frankfurt_000001_028232_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/frankfurt/frankfurt_000001_028232_leftImg8bit.png",
+    "total_predictions": 9,
+    "matched_predictions": 6,
+    "covered_predictions": 5,
+    "coverage_rate": 0.8333333333333334,
+    "image_size": [
+      2048,
+      1024
+    ]
+  },
+  {
+    "image_name": "munster_000171_000019_leftImg8bit.png",
+    "image_path": "/ssd_4TB/divake/conformal-od/data/cityscapes/leftImg8bit/val/munster/munster_000171_000019_leftImg8bit.png",
+    "total_predictions": 8,
+    "matched_predictions": 5,
+    "covered_predictions": 4,
+    "coverage_rate": 0.8,
+    "image_size": [
+      2048,
+      1024
+    ]
+  }
+]
