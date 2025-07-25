@@ -339,24 +339,118 @@ def print_performance_summary(results):
             print(f"{config['model_name']:<35} {coverage_str:<35} {mpiw_str:<30}")
         
         print("-" * 100)
+
+def print_mpiw_at_90_coverage(results):
+    """
+    Print MPIW values at exactly 90% coverage (89-91% range) for each dataset.
     
-    # Detailed statistics
-    print("\nDETAILED STATISTICS:")
+    Args:
+        results (dict): Performance data from analyze_all_models()
+    """
+    print("\n" + "=" * 80)
+    print("MPIW AT 90% COVERAGE (ESTIMATED FROM 85-95% RANGE) BY DATASET")
     print("=" * 80)
     
-    for model_id, data, _, _ in sorted_models:
-        config = data['config']
-        perf = data['performance']
+    if not results:
+        print("❌ No data available for analysis!")
+        return
+    
+    # Group results by dataset
+    datasets = {'coco': [], 'bdd100k': [], 'cityscapes': []}
+    
+    for model_id, data in results.items():
+        dataset_type = data['performance']['dataset_type']
+        datasets[dataset_type].append((model_id, data))
+    
+    # Print tables for each dataset showing MPIW at 90% coverage
+    for dataset_name, models in datasets.items():
+        if not models:
+            continue
+            
+        print(f"\n{dataset_name.upper()} DATASET - MPIW AT 90% COVERAGE:")
+        print("=" * 80)
+        print(f"{'Model':<45} {'MPIW@90%':<15} {'Data Points':<12}")
+        print("-" * 80)
         
-        print(f"\n{config['model_name']} ({model_id}):")
-        print(f"  Coverage: {perf['coverage_mean']:.3f} ± {perf['coverage_std']:.3f} "
-              f"(range: {perf['coverage_min']:.3f} - {perf['coverage_max']:.3f})")
-        print(f"  MPIW:     {perf['mpiw_mean']:.1f} ± {perf['mpiw_std']:.1f} "
-              f"(range: {perf['mpiw_min']:.1f} - {perf['mpiw_max']:.1f})")
-        print(f"  Trials:   {perf['n_trials']} calibration trials")
-        print(f"  Classes:  {perf['n_classes']} object classes")
-        if 'dataset_type' in perf:
-            print(f"  Dataset:  {perf['dataset_type'].upper()}")
+        # Calculate MPIW at 90% coverage for each model
+        models_at_90 = []
+        for model_id, data in models:
+            config = data['config']
+            
+            # Load the raw data again to get per-trial values
+            file_path = os.path.join(config['directory'], config['data_file'])
+            if not os.path.exists(file_path):
+                continue
+                
+            try:
+                control_data = torch.load(file_path, map_location='cpu', weights_only=False)
+                
+                # Determine valid classes based on dataset
+                if 'cityscapes' in model_id.lower():
+                    valid_classes = [0, 1, 2, 3, 5, 6, 7]
+                elif 'bdd100k' in model_id.lower():
+                    valid_classes = [0, 1, 2, 3, 5, 6, 7, 9]
+                else:
+                    valid_classes = list(range(control_data.shape[1]))
+                
+                # Extract per-trial coverage and MPIW
+                coverage_by_class = control_data[:, :, :, METRIC_INDICES['cov_box']].mean(dim=2)
+                mpiw_by_class = control_data[:, :, 0, METRIC_INDICES['mpiw']]
+                
+                # Filter trials with coverage between 89-91%
+                valid_trial_mpiws = []
+                for trial_idx in range(control_data.shape[0]):
+                    valid_coverages = [coverage_by_class[trial_idx, cls].item() for cls in valid_classes if cls < control_data.shape[1]]
+                    valid_mpiws = [mpiw_by_class[trial_idx, cls].item() for cls in valid_classes if cls < control_data.shape[1]]
+                    
+                    # Filter out zero values
+                    valid_coverages = [c for c in valid_coverages if c > 0]
+                    valid_mpiws = [m for m in valid_mpiws if m > 0]
+                    
+                    if valid_coverages and valid_mpiws:
+                        trial_coverage = np.mean(valid_coverages)
+                        trial_mpiw = np.mean(valid_mpiws)
+                        
+                        # Use wider range (85-95%) to get more data points for 90% estimation
+                        if 0.85 <= trial_coverage <= 0.95:
+                            valid_trial_mpiws.append((trial_coverage, trial_mpiw))
+                
+                if valid_trial_mpiws:
+                    # Extract coverage and MPIW values
+                    coverages = np.array([x[0] for x in valid_trial_mpiws])
+                    mpiws = np.array([x[1] for x in valid_trial_mpiws])
+                    
+                    # Method 1: Find trials closest to 90% coverage
+                    closest_to_90_indices = np.argsort(np.abs(coverages - 0.9))[:5]  # Take 5 closest
+                    mpiw_at_90 = np.mean(mpiws[closest_to_90_indices])
+                    
+                    # Method 2: If we have enough data points, do linear interpolation
+                    if len(valid_trial_mpiws) >= 3:
+                        try:
+                            from scipy.interpolate import interp1d
+                            if len(np.unique(coverages)) >= 2:  # Need at least 2 unique coverage values
+                                f = interp1d(coverages, mpiws, kind='linear', fill_value='extrapolate')
+                                mpiw_at_90 = float(f(0.9))
+                        except:
+                            pass  # Fall back to closest method
+                    
+                    models_at_90.append((model_id, data, mpiw_at_90, len(valid_trial_mpiws)))
+                    
+            except Exception as e:
+                continue
+        
+        # Sort by MPIW at 90% (lower is better)
+        models_at_90.sort(key=lambda x: x[2])
+        
+        # Print results
+        for model_id, data, mpiw_at_90, n_valid_trials in models_at_90:
+            config = data['config']
+            print(f"{config['model_name']:<45} {mpiw_at_90:<15.1f} {n_valid_trials:<12}")
+        
+        if not models_at_90:
+            print("No models found with coverage in 85-95% range")
+        
+        print("-" * 80)
 
 def find_best_models(results):
     """
@@ -424,6 +518,9 @@ def main():
     
     # Print comprehensive summary
     print_performance_summary(results)
+    
+    # Print MPIW at 90% coverage tables
+    print_mpiw_at_90_coverage(results)
     
     # Find and highlight best models
     find_best_models(results)
