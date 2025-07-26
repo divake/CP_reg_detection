@@ -45,76 +45,148 @@ plt.rcParams.update({
 })
 
 # ============================================================================
-# DATA PATHS
+# MULTI-MODEL DATA PATHS - 4 models per dataset
 # ============================================================================
 
-TRAINING_DATA_PATHS = {
-    'coco': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/coco_x_101_fpn/symmetric_adaptive_training_history.csv',
-    'bdd100k': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/bdd100k_x_101_fpn/symmetric_adaptive_training_history.csv'
+MULTI_MODEL_PATHS = {
+    'coco': {
+        'x_101_fpn': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/coco_x_101_fpn/symmetric_adaptive_training_history.csv',
+            'name': 'ResNeXt-101-FPN',
+            'linestyle': '-'
+        },
+        'r_50_fpn': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/coco_r_50_fpn/symmetric_adaptive_training_history.csv',
+            'name': 'ResNet-50-FPN',
+            'linestyle': '--'
+        },
+        'cascade_r_50': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/coco_cascade_r_50/symmetric_adaptive_training_history.csv',
+            'name': 'Cascade R-CNN',
+            'linestyle': '-.'
+        },
+        'r_50_c4': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/coco_r_50_c4/symmetric_adaptive_training_history.csv',
+            'name': 'ResNet-50-C4',
+            'linestyle': ':'
+        }
+    },
+    'bdd100k': {
+        'x_101_fpn': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/bdd100k_x_101_fpn/symmetric_adaptive_training_history.csv',
+            'name': 'ResNeXt-101-FPN',
+            'linestyle': '-'
+        },
+        'r_50_fpn': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/bdd100k_r_50_fpn/symmetric_adaptive_training_history.csv',
+            'name': 'ResNet-50-FPN',
+            'linestyle': '--'
+        },
+        'cascade_r_50': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/bdd100k_cascade_r_50/symmetric_adaptive_training_history.csv',
+            'name': 'Cascade R-CNN',
+            'linestyle': '-.'
+        },
+        'r_50_c4': {
+            'path': '/ssd_4TB/divake/conformal-od/learnable_scoring_fn/saved_models/symmetric/bdd100k_r_50_c4/symmetric_adaptive_training_history.csv',
+            'name': 'ResNet-50-C4',
+            'linestyle': ':'
+        }
+    }
 }
 
-# Professional colors for datasets
+# Professional color palette with lightness variations
 DATASET_COLORS = {
-    'coco': '#1f77b4',      # Blue
-    'bdd100k': '#ff7f0e'    # Orange
+    'coco': {
+        'x_101_fpn': '#0d4f8c',      # Dark blue (primary model)
+        'r_50_fpn': '#1f77b4',       # Medium blue  
+        'cascade_r_50': '#5ba3d4',   # Light blue
+        'r_50_c4': '#aec7e8'         # Very light blue
+    },
+    'bdd100k': {
+        'x_101_fpn': '#cc4125',      # Dark orange (primary model)
+        'r_50_fpn': '#ff7f0e',       # Medium orange
+        'cascade_r_50': '#ff9f40',   # Light orange
+        'r_50_c4': '#ffbb78'         # Very light orange
+    }
 }
 
 # ============================================================================
 # DATA LOADING FUNCTIONS
 # ============================================================================
 
-def load_training_data(dataset_name):
-    """Load training history data for a dataset."""
-    if dataset_name not in TRAINING_DATA_PATHS:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+def load_multi_model_data():
+    """Load training history data for all models across both datasets."""
+    all_data = {}
     
-    file_path = TRAINING_DATA_PATHS[dataset_name]
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Training data not found: {file_path}")
+    for dataset_name in ['coco', 'bdd100k']:
+        all_data[dataset_name] = {}
+        print(f"📊 Loading {dataset_name.upper()} models:")
+        
+        for model_key, config in MULTI_MODEL_PATHS[dataset_name].items():
+            file_path = config['path']
+            
+            if not os.path.exists(file_path):
+                print(f"  ❌ {config['name']} (file missing)")
+                continue
+            
+            try:
+                df = pd.read_csv(file_path)
+                
+                # Extract key metrics
+                data = {
+                    'epoch': df['epoch'].values,
+                    'coverage': df['val_coverage'].values,
+                    'mpiw': df['val_mpiw'].values,
+                    'tau': df['tau'].values,
+                    'train_loss': df['train_loss'].values,
+                    'name': config['name'],
+                    'linestyle': config['linestyle']
+                }
+                
+                all_data[dataset_name][model_key] = data
+                print(f"  ✅ {config['name']}")
+                
+            except Exception as e:
+                print(f"  ❌ {config['name']} (error: {e})")
     
-    df = pd.read_csv(file_path)
-    
-    # Extract key metrics
-    data = {
-        'epoch': df['epoch'].values,
-        'coverage': df['val_coverage'].values,
-        'mpiw': df['val_mpiw'].values,
-        'tau': df['tau'].values,
-        'train_loss': df['train_loss'].values
-    }
-    
-    return data
+    return all_data
 
 # ============================================================================
 # PLOT 1: TAU CALIBRATION ANALYSIS (3-PANEL)
 # ============================================================================
 
 def create_tau_calibration_analysis():
-    """Create 3-panel plot showing Coverage, Tau, and MPIW evolution."""
+    """Create 3-panel plot showing Coverage, Tau, and MPIW evolution for all models."""
     
-    # Load data for both datasets
-    coco_data = load_training_data('coco')
-    bdd100k_data = load_training_data('bdd100k')
+    # Load data for all models
+    all_data = load_multi_model_data()
     
     # Create figure with 3 square subplots - Conference paper standard
-    fig, axes = plt.subplots(1, 3, figsize=(text_width * 2.0, text_width * 0.7))
+    fig, axes = plt.subplots(3, 1, figsize=(text_width * 0.9, text_width * 1.8))
     # fig.suptitle('Tau Calibration Analysis', 
     #              fontsize=fs_p1, fontweight='bold', y=0.95)
     
-    # Colors
-    coco_color = DATASET_COLORS['coco']
-    bdd100k_color = DATASET_COLORS['bdd100k']
-    
     # ========================================================================
-    # LEFT PANEL: COVERAGE EVOLUTION
+    # TOP PANEL: COVERAGE EVOLUTION
     # ========================================================================
     ax1 = axes[0]
     
-    # Plot coverage evolution
-    ax1.plot(coco_data['epoch'], coco_data['coverage'] * 100, 
-             color=coco_color, linewidth=2, label='COCO', marker='o', markersize=3)
-    ax1.plot(bdd100k_data['epoch'], bdd100k_data['coverage'] * 100, 
-             color=bdd100k_color, linewidth=2, label='BDD100K', marker='s', markersize=3)
+    # Plot coverage evolution for all models with color variations
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            # Only label the first model per dataset to avoid legend clutter
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            
+            # Get model-specific color
+            color = dataset_colors[model_key]
+            
+            ax1.plot(data['epoch'], data['coverage'] * 100, 
+                     color=color, linewidth=1.0, linestyle='-',
+                     label=label, alpha=0.9)
     
     # Target coverage zone (88-92%)
     ax1.axhspan(88, 92, alpha=0.2, color='green', label='Target Zone (88-92%)')
@@ -124,9 +196,10 @@ def create_tau_calibration_analysis():
     ax1.set_ylabel('Coverage (%)', fontweight='bold')
     ax1.set_ylim(82, 98)
     ax1.set_xlim(0, 50)
-    # Make visually square by ensuring proper data range scaling
+    ax1.set_aspect('auto')  # Let matplotlib handle aspect ratio
     ax1.grid(True, alpha=0.3)
-    ax1.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
+    # Instead of individual legends, we'll add a comprehensive one at the bottom
+    # ax1.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
     # ax1.set_title('Coverage Maintained', fontweight='bold', loc='center', fontsize=fs)
     
     # ========================================================================
@@ -134,19 +207,29 @@ def create_tau_calibration_analysis():
     # ========================================================================
     ax2 = axes[1]
     
-    # Plot tau evolution
-    ax2.plot(coco_data['epoch'], coco_data['tau'], 
-             color=coco_color, linewidth=2, label='COCO', marker='o', markersize=3)
-    ax2.plot(bdd100k_data['epoch'], bdd100k_data['tau'], 
-             color=bdd100k_color, linewidth=2, label='BDD100K', marker='s', markersize=3)
+    # Plot tau evolution for all models with color variations
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            # Only label the first model per dataset to avoid legend clutter
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            
+            # Get model-specific color
+            color = dataset_colors[model_key]
+            
+            ax2.plot(data['epoch'], data['tau'], 
+                     color=color, linewidth=1.0, linestyle='-',
+                     label=label, alpha=0.9)
     
     ax2.set_xlabel('Epoch', fontweight='bold')
-    ax2.set_ylabel('Tau (τ)', fontweight='bold')
+    ax2.set_ylabel('Calibration (τ)', fontweight='bold')
     ax2.set_ylim(0, 1.1)
     ax2.set_xlim(0, 50)
-    # Make visually square by ensuring proper data range scaling
+    ax2.set_aspect('auto')  # Let matplotlib handle aspect ratio
     ax2.grid(True, alpha=0.3)
-    ax2.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
+    # ax2.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
     #ax2.set_title('Tau Adaptation', fontweight='bold', loc='center', fontsize=fs)
     
     # Add annotations for final tau values (adjusted for square plot)
@@ -162,47 +245,98 @@ def create_tau_calibration_analysis():
     #          facecolor='white', alpha=0.8))
     
     # ========================================================================
-    # RIGHT PANEL: MPIW EVOLUTION
+    # BOTTOM PANEL: MPIW EVOLUTION
     # ========================================================================
     ax3 = axes[2]
     
-    # Plot MPIW evolution
-    ax3.plot(coco_data['epoch'], coco_data['mpiw'], 
-             color=coco_color, linewidth=2, label='COCO', marker='o', markersize=3)
-    ax3.plot(bdd100k_data['epoch'], bdd100k_data['mpiw'], 
-             color=bdd100k_color, linewidth=2, label='BDD100K', marker='s', markersize=3)
+    # Plot MPIW evolution for all models and collect statistics
+    mpiw_stats = {'coco': [], 'bdd100k': []}
+    
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            # Only label the first model per dataset to avoid legend clutter
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            
+            # Get model-specific color
+            color = dataset_colors[model_key]
+            
+            ax3.plot(data['epoch'], data['mpiw'], 
+                     color=color, linewidth=1.0, linestyle='-',
+                     label=label, alpha=0.9)
+            
+            # Calculate improvement for statistics
+            initial_mpiw = data['mpiw'][0]
+            final_mpiw = data['mpiw'][-1]
+            improvement = (initial_mpiw - final_mpiw) / initial_mpiw * 100
+            mpiw_stats[dataset_name].append(improvement)
     
     ax3.set_xlabel('Epoch', fontweight='bold')
     ax3.set_ylabel('MPIW (pixels)', fontweight='bold')
     ax3.set_xlim(0, 50)
     # Set y-limits to make square aspect ratio work better
-    max_mpiw = max(max(coco_data['mpiw']), max(bdd100k_data['mpiw']))
-    min_mpiw = min(min(coco_data['mpiw']), min(bdd100k_data['mpiw']))
-    mpiw_range = max_mpiw - min_mpiw
-    ax3.set_ylim(min_mpiw - mpiw_range*0.1, max_mpiw + mpiw_range*0.1)
-    # Make visually square by ensuring proper data range scaling
+    all_mpiw_values = []
+    for dataset_name in ['coco', 'bdd100k']:
+        for model_key, data in all_data[dataset_name].items():
+            all_mpiw_values.extend(data['mpiw'])
+    
+    if all_mpiw_values:
+        max_mpiw = max(all_mpiw_values)
+        min_mpiw = min(all_mpiw_values)
+        mpiw_range = max_mpiw - min_mpiw
+        ax3.set_ylim(min_mpiw - mpiw_range*0.1, max_mpiw + mpiw_range*0.1)
+    ax3.set_aspect('auto')  # Let matplotlib handle aspect ratio
     ax3.grid(True, alpha=0.3)
-    ax3.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
+    # ax3.legend(loc='upper right', framealpha=0.9, fontsize=fs_m1)
     # ax3.set_title('MPIW Reduction', fontweight='bold', loc='center', fontsize=fs)
     
-    # Add improvement percentages
-    initial_mpiw_coco = coco_data['mpiw'][0]
-    final_mpiw_coco = coco_data['mpiw'][-1]
-    improvement_coco = (initial_mpiw_coco - final_mpiw_coco) / initial_mpiw_coco * 100
+    # Print multi-model statistics
+    print(f"\n📊 Multi-Model MPIW Improvement Statistics:")
+    for dataset_name in ['coco', 'bdd100k']:
+        improvements = mpiw_stats[dataset_name]
+        if improvements:
+            mean_imp = np.mean(improvements)
+            std_imp = np.std(improvements)
+            print(f"  {dataset_name.upper()}: {mean_imp:.1f}±{std_imp:.1f}% reduction (n={len(improvements)} models)")
+        else:
+            print(f"  {dataset_name.upper()}: No data available")
     
-    initial_mpiw_bdd100k = bdd100k_data['mpiw'][0]
-    final_mpiw_bdd100k = bdd100k_data['mpiw'][-1]
-    improvement_bdd100k = (initial_mpiw_bdd100k - final_mpiw_bdd100k) / initial_mpiw_bdd100k * 100
+    # ========================================================================
+    # COMPREHENSIVE MODEL LEGEND - Shows which line corresponds to which model
+    # ========================================================================
     
-    # Add text box with improvements (adjusted for square plot)
-    # textstr = f'COCO: {improvement_coco:.1f}% ↓\nBDD100K: {improvement_bdd100k:.1f}% ↓'
-    # props = dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.8)
-    # ax3.text(0.02, 0.98, textstr, transform=ax3.transAxes, fontsize=fs_m1-1,
-    #          verticalalignment='top', bbox=props)
+    # Create custom legend elements for all models
+    from matplotlib.lines import Line2D
     
-    # Adjust layout for square format (horizontal layout)
+    legend_elements = []
+    
+    # Add COCO models
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=2, label='COCO Dataset:'))
+    for model_key, color in DATASET_COLORS['coco'].items():
+        model_name = MULTI_MODEL_PATHS['coco'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=1.5, 
+                                    label=f'  {model_name}'))
+    
+    # Add spacing
+    legend_elements.append(Line2D([0], [0], color='white', linewidth=0, label=''))
+    
+    # Add BDD100K models  
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=2, label='BDD100K Dataset:'))
+    for model_key, color in DATASET_COLORS['bdd100k'].items():
+        model_name = MULTI_MODEL_PATHS['bdd100k'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=1.5,
+                                    label=f'  {model_name}'))
+    
+    # Add the comprehensive legend outside the plot area
+    fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.5, 0.02), 
+               ncol=2, frameon=True, framealpha=0.95, fontsize=fs_m1-1,
+               columnspacing=1.5, handlelength=1.5)
+    
+    # Adjust layout for square subplots in vertical format with room for legend
     plt.tight_layout()
-    plt.subplots_adjust(top=0.90, bottom=0.15, left=0.08, right=0.98, wspace=0.35)
+    plt.subplots_adjust(top=0.97, bottom=0.15, left=0.15, right=0.90, hspace=0.3)
     
     # Save plot
     output_path = '/ssd_4TB/divake/conformal-od/plots/tau_calibration_analysis.png'
@@ -311,10 +445,10 @@ def main():
         fig1 = create_tau_calibration_analysis()
         plt.close(fig1)
         
-        # Create Plot 2: Coverage-Efficiency Evolution
-        print("\n📈 Creating Coverage-Efficiency Evolution Plot...")
-        fig2 = create_coverage_efficiency_evolution()
-        plt.close(fig2)
+        # Create Plot 2: Coverage-Efficiency Evolution (skip for now - focus on plot 1)
+        # print("\n📈 Creating Coverage-Efficiency Evolution Plot...")
+        # fig2 = create_coverage_efficiency_evolution()
+        # plt.close(fig2)
         
         print("\n" + "="*80)
         print("✅ ALL PLOTS GENERATED SUCCESSFULLY!")
