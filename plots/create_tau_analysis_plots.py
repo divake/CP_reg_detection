@@ -423,13 +423,21 @@ def create_coverage_efficiency_evolution():
     
     legend_elements = []
     
-    # Start/End markers section
+    # Start/End markers section with actual matplotlib markers
     legend_elements.append(Line2D([0], [0], color='black', linewidth=2, 
                                  label='Start/End Markers:', marker='None'))
-    legend_elements.append(Line2D([0], [0], color='gray', linewidth=0, 
-                                 label='★ COCO Start     ● COCO End', marker='None'))
-    legend_elements.append(Line2D([0], [0], color='gray', linewidth=0,
-                                 label='■ BDD100K Start  ▲ BDD100K End', marker='None'))
+    
+    # COCO markers
+    legend_elements.append(Line2D([0], [0], color='red', linewidth=0, marker='*', 
+                                 markersize=6.8, label='COCO Start', markeredgecolor='darkred'))
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=0, marker='o', 
+                                 markersize=6.8, label='COCO End', markeredgecolor='black'))
+    
+    # BDD100K markers  
+    legend_elements.append(Line2D([0], [0], color='red', linewidth=0, marker='s', 
+                                 markersize=6.8, label='BDD100K Start', markeredgecolor='darkred'))
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=0, marker='^', 
+                                 markersize=6.8, label='BDD100K End', markeredgecolor='black'))
     
     # Add spacing
     legend_elements.append(Line2D([0], [0], color='white', linewidth=0, label=''))
@@ -453,8 +461,8 @@ def create_coverage_efficiency_evolution():
     # Professional formatting
     ax.set_xlabel('Coverage Rate', fontweight='bold', fontsize=fs)
     ax.set_ylabel('MPIW (pixels)', fontweight='bold', fontsize=fs)
-    ax.set_title('Multi-Architecture Coverage-Efficiency Tradeoff', 
-                fontweight='bold', fontsize=fs_p1, pad=15)
+    # ax.set_title('Multi-Architecture Coverage-Efficiency Tradeoff', 
+    #             fontweight='bold', fontsize=fs_p1, pad=15)
     
     # Set appropriate limits with padding
     if all_coverage and all_mpiw:
@@ -467,14 +475,16 @@ def create_coverage_efficiency_evolution():
     ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
     ax.set_axisbelow(True)
     
-    # Remove top and right spines for cleaner look
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # Show all spines to create complete box around plot
+    ax.spines['top'].set_visible(True)
+    ax.spines['right'].set_visible(True)
+    ax.spines['bottom'].set_visible(True)
+    ax.spines['left'].set_visible(True)
     
-    # Add the comprehensive legend outside the plot area
+    # Add the comprehensive legend outside the plot area (reduced size by 15%)
     fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.5, 0.02), 
-               ncol=2, frameon=True, framealpha=0.95, fontsize=fs_m1-1,
-               columnspacing=1.5, handlelength=1.5)
+               ncol=2, frameon=True, framealpha=0.95, fontsize=int((fs_m1-1)*0.85),
+               columnspacing=1.3, handlelength=1.3)
     
     # Adjust layout with room for legend
     plt.tight_layout()
@@ -491,6 +501,223 @@ def create_coverage_efficiency_evolution():
     print(f"📊 MPIW range: {min(all_mpiw):.1f} - {max(all_mpiw):.1f} pixels")
     print(f"📊 Epoch range: {min(all_epochs)} - {max(all_epochs)}")
     
+    return fig
+
+# ============================================================================
+# PLOT 3: COMBINED 4x4 LAYOUT - ALL PLOTS IN ONE FIGURE
+# ============================================================================
+
+def create_combined_analysis_figure():
+    """Create 2x2 grid layout with 4 square plots combining all tau analysis and coverage-efficiency plots."""
+    
+    # Load data for all models and datasets
+    all_data = load_multi_model_data()
+    
+    # Create figure with 2x2 grid layout - 4 square subplots
+    fig, axes = plt.subplots(2, 2, figsize=(text_width * 1.4, text_width * 1.4))
+    
+    # Define subplot positions
+    ax_coverage = axes[0, 0]   # Top-left: Coverage Evolution
+    ax_tau = axes[0, 1]        # Top-right: Tau Evolution  
+    ax_mpiw = axes[1, 0]       # Bottom-left: MPIW Evolution + Legend
+    ax_tradeoff = axes[1, 1]   # Bottom-right: Coverage-Efficiency Tradeoff
+    
+    # ========================================================================
+    # PANEL 1: COVERAGE EVOLUTION (Top-left)
+    # ========================================================================
+    
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            color = dataset_colors[model_key]
+            
+            ax_coverage.plot(data['epoch'], data['coverage'] * 100, 
+                           color=color, linewidth=1.0, linestyle='-',
+                           label=label, alpha=0.9)
+    
+    # Target coverage zone
+    ax_coverage.axhspan(88, 92, alpha=0.2, color='green', label='Target Zone')
+    ax_coverage.axhline(y=90, color='darkgreen', linestyle='--', alpha=0.7, linewidth=1)
+    
+    ax_coverage.set_xlabel('Epoch', fontweight='bold', fontsize=fs_m1)
+    ax_coverage.set_ylabel('Coverage (%)', fontweight='bold', fontsize=fs_m1)
+    ax_coverage.set_ylim(82, 98)
+    ax_coverage.set_xlim(0, 50)
+    ax_coverage.grid(True, alpha=0.3)
+    ax_coverage.set_title('(a) Coverage Evolution', fontweight='bold', fontsize=fs, pad=10)
+    
+    # ========================================================================
+    # PANEL 2: TAU EVOLUTION (Top-center)
+    # ========================================================================
+    
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            color = dataset_colors[model_key]
+            
+            ax_tau.plot(data['epoch'], data['tau'], 
+                       color=color, linewidth=1.0, linestyle='-',
+                       label=label, alpha=0.9)
+    
+    ax_tau.set_xlabel('Epoch', fontweight='bold', fontsize=fs_m1)
+    ax_tau.set_ylabel('Tau (τ)', fontweight='bold', fontsize=fs_m1)
+    ax_tau.set_ylim(0, 1.1)
+    ax_tau.set_xlim(0, 50)
+    ax_tau.grid(True, alpha=0.3)
+    ax_tau.set_title('(b) Calibration (τ) ', fontweight='bold', fontsize=fs, pad=10)
+    
+    # ========================================================================
+    # PANEL 3: MPIW EVOLUTION (Bottom-left span) + MODEL LEGEND
+    # ========================================================================
+    
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            label = dataset_name.upper() if model_key == 'x_101_fpn' else ''
+            color = dataset_colors[model_key]
+            
+            ax_mpiw.plot(data['epoch'], data['mpiw'], 
+                        color=color, linewidth=1.0, linestyle='-',
+                        label=label, alpha=0.9)
+    
+    ax_mpiw.set_xlabel('Epoch', fontweight='bold', fontsize=fs_m1)
+    ax_mpiw.set_ylabel('MPIW (pixels)', fontweight='bold', fontsize=fs_m1)
+    ax_mpiw.set_xlim(0, 50)
+    ax_mpiw.grid(True, alpha=0.3)
+    ax_mpiw.set_title('(c) MPIW Reduction', fontweight='bold', fontsize=fs, pad=10)
+    
+    # Add model legend to MPIW panel
+    from matplotlib.lines import Line2D
+    legend_elements = []
+    
+    # COCO models
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=1.5, 
+                                 label='COCO Dataset:'))
+    for model_key, color in DATASET_COLORS['coco'].items():
+        model_name = MULTI_MODEL_PATHS['coco'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=2,
+                                     label=f'  {model_name}'))
+    
+    # BDD100K models  
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=1.5,
+                                 label='BDD100K Dataset:'))
+    for model_key, color in DATASET_COLORS['bdd100k'].items():
+        model_name = MULTI_MODEL_PATHS['bdd100k'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=2,
+                                     label=f'  {model_name}'))
+    
+    ax_mpiw.legend(handles=legend_elements, loc='upper right', 
+                   frameon=True, framealpha=0.95, fontsize=fs_m1-3)
+    
+    # ========================================================================
+    # PANEL 4: COVERAGE-EFFICIENCY TRADEOFF (Bottom-right)
+    # ========================================================================
+    
+    # Collect all epoch data for unified colorbar
+    all_epochs = []
+    all_coverage = []
+    all_mpiw = []
+    
+    # Dataset-specific marker configurations
+    dataset_markers = {
+        'coco': {'start': '*', 'end': 'o'},
+        'bdd100k': {'start': 's', 'end': '^'}
+    }
+    
+    # Plot trajectories for all models across both datasets
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            coverage = data['coverage'] * 100
+            mpiw = data['mpiw']
+            epochs = data['epoch']
+            
+            all_epochs.extend(epochs)
+            all_coverage.extend(coverage)
+            all_mpiw.extend(mpiw)
+            
+            color = dataset_colors[model_key]
+            
+            # Plot trajectory dots with epoch-based viridis coloring
+            scatter = ax_tradeoff.scatter(coverage, mpiw, c=epochs, cmap='viridis', 
+                                        s=20, alpha=0.7, edgecolors='none', zorder=3)
+            
+            # Mark start and end points
+            ax_tradeoff.scatter(coverage[0], mpiw[0], 
+                              color=color, s=80, 
+                              marker=dataset_markers[dataset_name]['start'], 
+                              zorder=5, edgecolor='darkred', linewidth=1,
+                              alpha=0.9)
+            
+            ax_tradeoff.scatter(coverage[-1], mpiw[-1], 
+                              color=color, s=80,
+                              marker=dataset_markers[dataset_name]['end'],
+                              zorder=5, edgecolor='black', linewidth=1,
+                              alpha=0.9)
+    
+    # Add colorbar for epochs
+    cbar = plt.colorbar(scatter, ax=ax_tradeoff, shrink=0.6, aspect=15)
+    cbar.set_label('Epoch', fontweight='bold', fontsize=fs_m1)
+    cbar.ax.tick_params(labelsize=fs_m1-1)
+    
+    # Professional formatting
+    ax_tradeoff.set_xlabel('Coverage Rate', fontweight='bold', fontsize=fs_m1)
+    ax_tradeoff.set_ylabel('MPIW (pixels)', fontweight='bold', fontsize=fs_m1)
+    ax_tradeoff.set_title('(d) Coverage-Efficiency Tradeoff', fontweight='bold', fontsize=fs, pad=10)
+    
+    # Set limits
+    if all_coverage and all_mpiw:
+        coverage_margin = (max(all_coverage) - min(all_coverage)) * 0.05
+        mpiw_margin = (max(all_mpiw) - min(all_mpiw)) * 0.05
+        ax_tradeoff.set_xlim(min(all_coverage) - coverage_margin, max(all_coverage) + coverage_margin)
+        ax_tradeoff.set_ylim(min(all_mpiw) - mpiw_margin, max(all_mpiw) + mpiw_margin)
+    
+    ax_tradeoff.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+    ax_tradeoff.set_axisbelow(True)
+    
+    # Show all spines for complete box
+    for spine in ax_tradeoff.spines.values():
+        spine.set_visible(True)
+    
+    # Add compact tradeoff legend
+    tradeoff_legend = [
+        Line2D([0], [0], color='red', linewidth=0, marker='*', markersize=6, 
+               label='COCO Start', markeredgecolor='darkred'),
+        Line2D([0], [0], color='black', linewidth=0, marker='o', markersize=6,
+               label='COCO End', markeredgecolor='black'),
+        Line2D([0], [0], color='red', linewidth=0, marker='s', markersize=6,
+               label='BDD100K Start', markeredgecolor='darkred'),
+        Line2D([0], [0], color='black', linewidth=0, marker='^', markersize=6,
+               label='BDD100K End', markeredgecolor='black')
+    ]
+    
+    ax_tradeoff.legend(handles=tradeoff_legend, loc='upper left', frameon=True, 
+                      framealpha=0.9, fontsize=fs_m1-2, ncol=2)
+    
+    # Add main title
+    # fig.suptitle('Comprehensive Learnable Conformal Prediction Analysis', 
+    #             fontsize=fs_p1, fontweight='bold', y=0.95)
+    
+    # Adjust layout for 2x2 square subplots
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.90, bottom=0.08, left=0.10, right=0.95, hspace=0.25, wspace=0.25)
+    
+    # Save combined plot
+    output_path = '/ssd_4TB/divake/conformal-od/plots/combined_analysis_2x2.png'
+    plt.savefig(output_path, dpi=1000, bbox_inches='tight')
+    plt.savefig(output_path.replace('.png', '.pdf'), bbox_inches='tight')
+    
+    print(f"✅ Combined 2x2 analysis saved: {output_path}")
     return fig
 
 # ============================================================================
@@ -518,11 +745,17 @@ def main():
         fig2 = create_coverage_efficiency_evolution()
         plt.close(fig2)
         
+        # Create Plot 3: Combined 2x2 Layout (All plots in one comprehensive figure)
+        print("\n📊 Creating Combined 2x2 Analysis Figure...")
+        fig3 = create_combined_analysis_figure()
+        plt.close(fig3)
+        
         print("\n" + "="*80)
         print("✅ ALL PLOTS GENERATED SUCCESSFULLY!")
         print("="*80)
         print("📊 Tau Calibration Analysis: /ssd_4TB/divake/conformal-od/plots/tau_calibration_analysis.png")
         print("📈 Coverage-Efficiency Evolution: /ssd_4TB/divake/conformal-od/plots/coverage_efficiency_evolution.png")
+        print("🎯 Combined 2x2 Analysis: /ssd_4TB/divake/conformal-od/plots/combined_analysis_2x2.png")
         print("="*80)
         
         print("\n🎯 KEY INSIGHTS FOR AAAI PAPER:")
