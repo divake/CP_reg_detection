@@ -351,71 +351,134 @@ def create_tau_calibration_analysis():
 # ============================================================================
 
 def create_coverage_efficiency_evolution():
-    """Create coverage-efficiency evolution plot showing training trajectory."""
+    """Create multi-dataset coverage-efficiency evolution plot with shape-based differentiation."""
     
-    # Load data
-    coco_data = load_training_data('coco')
-    bdd100k_data = load_training_data('bdd100k')
+    # Load data for all models and datasets
+    all_data = load_multi_model_data()
     
-    # Create figure
-    fig, axes = plt.subplots(1, 2, figsize=(text_width * 2, text_width * 0.8))
-    fig.suptitle('Coverage-Efficiency Tradeoff Evolution During Training', 
-                 fontsize=fs_p1, fontweight='bold', y=0.95)
+    # Create figure - single plot for both datasets
+    fig, ax = plt.subplots(1, 1, figsize=(text_width * 0.8, text_width * 0.8))
     
-    datasets = [('coco', coco_data, 'COCO'), ('bdd100k', bdd100k_data, 'BDD100K')]
+    # ========================================================================
+    # MULTI-DATASET COVERAGE-EFFICIENCY TRADEOFF
+    # ========================================================================
     
-    for idx, (dataset_name, data, title) in enumerate(datasets):
-        ax = axes[idx]
-        
-        coverage = data['coverage'] * 100  # Convert to percentage
-        mpiw = data['mpiw']
-        epochs = data['epoch']
-        
-        # Create color gradient for epochs
-        colors = plt.cm.viridis(np.linspace(0, 1, len(epochs)))
-        
-        # Plot trajectory
-        for i in range(len(epochs) - 1):
-            ax.plot([coverage[i], coverage[i+1]], [mpiw[i], mpiw[i+1]], 
-                   color=colors[i], linewidth=2, alpha=0.7)
-        
-        # Mark start and end points
-        ax.scatter(coverage[0], mpiw[0], color='red', s=100, marker='*', 
-                  label='Start (Epoch 1)', zorder=5, edgecolor='darkred', linewidth=1)
-        ax.scatter(coverage[-1], mpiw[-1], color='darkgreen', s=100, marker='*', 
-                  label=f'End (Epoch {epochs[-1]})', zorder=5, edgecolor='black', linewidth=1)
-        
-        # Add arrows to show direction
-        mid_point = len(epochs) // 2
-        dx = coverage[mid_point + 5] - coverage[mid_point]
-        dy = mpiw[mid_point + 5] - mpiw[mid_point]
-        ax.arrow(coverage[mid_point], mpiw[mid_point], dx*0.5, dy*0.5,
-                head_width=0.3, head_length=1.5, fc='black', ec='black', alpha=0.6)
-        
-        # Formatting
-        ax.set_xlabel('Coverage (%)', fontweight='bold')
-        ax.set_ylabel('MPIW (pixels)', fontweight='bold')
-        ax.set_title(f'({chr(97+idx)}) {title}', fontweight='bold', loc='left')
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='upper right', framealpha=0.9)
-        
-        # Set appropriate limits
-        coverage_margin = (max(coverage) - min(coverage)) * 0.1
-        mpiw_margin = (max(mpiw) - min(mpiw)) * 0.1
-        ax.set_xlim(min(coverage) - coverage_margin, max(coverage) + coverage_margin)
-        ax.set_ylim(min(mpiw) - mpiw_margin, max(mpiw) + mpiw_margin)
-        
-        # Add colorbar for epochs
-        if idx == 1:  # Only for the second subplot
-            sm = plt.cm.ScalarMappable(cmap='viridis', 
-                                     norm=plt.Normalize(vmin=1, vmax=max(epochs)))
-            sm.set_array([])
-            cbar = plt.colorbar(sm, ax=ax, shrink=0.8)
-            cbar.set_label('Epoch', fontweight='bold')
+    # Collect all epoch data for unified colorbar
+    all_epochs = []
+    all_coverage = []
+    all_mpiw = []
     
-    # Adjust layout
+    # Dataset-specific marker configurations
+    dataset_markers = {
+        'coco': {'start': '*', 'end': 'o'},      # star for start, circle for end
+        'bdd100k': {'start': 's', 'end': '^'}    # square for start, triangle for end
+    }
+    
+    # Plot trajectories for all models across both datasets
+    for dataset_name in ['coco', 'bdd100k']:
+        dataset_colors = DATASET_COLORS[dataset_name]
+        dataset_models = all_data[dataset_name]
+        
+        for model_key, data in dataset_models.items():
+            coverage = data['coverage'] * 100  # Convert to percentage
+            mpiw = data['mpiw']
+            epochs = data['epoch']
+            
+            # Collect data for unified processing
+            all_epochs.extend(epochs)
+            all_coverage.extend(coverage)
+            all_mpiw.extend(mpiw)
+            
+            # Get model-specific color
+            color = dataset_colors[model_key]
+            
+            # Plot trajectory dots with epoch-based viridis coloring
+            scatter = ax.scatter(coverage, mpiw, c=epochs, cmap='viridis', 
+                               s=25, alpha=0.7, edgecolors='none', zorder=3)
+            
+            # Mark start point with dataset-specific shape and model color
+            ax.scatter(coverage[0], mpiw[0], 
+                      color=color, s=100, 
+                      marker=dataset_markers[dataset_name]['start'], 
+                      zorder=5, edgecolor='darkred', linewidth=1.5,
+                      alpha=0.9)
+            
+            # Mark end point with dataset-specific shape and model color  
+            ax.scatter(coverage[-1], mpiw[-1], 
+                      color=color, s=100,
+                      marker=dataset_markers[dataset_name]['end'],
+                      zorder=5, edgecolor='black', linewidth=1.5,
+                      alpha=0.9)
+    
+    # Add unified colorbar for epochs (using the last scatter object)
+    cbar = plt.colorbar(scatter, ax=ax, shrink=0.8, aspect=20)
+    cbar.set_label('Epoch', fontweight='bold', fontsize=fs)
+    cbar.ax.tick_params(labelsize=fs_m1)
+    
+    # ========================================================================
+    # CREATE COMPREHENSIVE LEGEND
+    # ========================================================================
+    
+    from matplotlib.lines import Line2D
+    
+    legend_elements = []
+    
+    # Start/End markers section
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=2, 
+                                 label='Start/End Markers:', marker='None'))
+    legend_elements.append(Line2D([0], [0], color='gray', linewidth=0, 
+                                 label='★ COCO Start     ● COCO End', marker='None'))
+    legend_elements.append(Line2D([0], [0], color='gray', linewidth=0,
+                                 label='■ BDD100K Start  ▲ BDD100K End', marker='None'))
+    
+    # Add spacing
+    legend_elements.append(Line2D([0], [0], color='white', linewidth=0, label=''))
+    
+    # Model colors section
+    legend_elements.append(Line2D([0], [0], color='black', linewidth=2,
+                                 label='Model Colors:', marker='None'))
+    
+    # COCO models
+    for model_key, color in DATASET_COLORS['coco'].items():
+        model_name = MULTI_MODEL_PATHS['coco'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=3,
+                                     label=f'  COCO: {model_name}'))
+    
+    # BDD100K models  
+    for model_key, color in DATASET_COLORS['bdd100k'].items():
+        model_name = MULTI_MODEL_PATHS['bdd100k'][model_key]['name']
+        legend_elements.append(Line2D([0], [0], color=color, linewidth=3,
+                                     label=f'  BDD100K: {model_name}'))
+    
+    # Professional formatting
+    ax.set_xlabel('Coverage Rate', fontweight='bold', fontsize=fs)
+    ax.set_ylabel('MPIW (pixels)', fontweight='bold', fontsize=fs)
+    ax.set_title('Multi-Architecture Coverage-Efficiency Tradeoff', 
+                fontweight='bold', fontsize=fs_p1, pad=15)
+    
+    # Set appropriate limits with padding
+    if all_coverage and all_mpiw:
+        coverage_margin = (max(all_coverage) - min(all_coverage)) * 0.05
+        mpiw_margin = (max(all_mpiw) - min(all_mpiw)) * 0.05
+        ax.set_xlim(min(all_coverage) - coverage_margin, max(all_coverage) + coverage_margin)
+        ax.set_ylim(min(all_mpiw) - mpiw_margin, max(all_mpiw) + mpiw_margin)
+    
+    # Grid and styling
+    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+    ax.set_axisbelow(True)
+    
+    # Remove top and right spines for cleaner look
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    # Add the comprehensive legend outside the plot area
+    fig.legend(handles=legend_elements, loc='center', bbox_to_anchor=(0.5, 0.02), 
+               ncol=2, frameon=True, framealpha=0.95, fontsize=fs_m1-1,
+               columnspacing=1.5, handlelength=1.5)
+    
+    # Adjust layout with room for legend
     plt.tight_layout()
-    plt.subplots_adjust(top=0.88, bottom=0.12)
+    plt.subplots_adjust(top=0.90, bottom=0.25, left=0.12, right=0.85)
     
     # Save plot
     output_path = '/ssd_4TB/divake/conformal-od/plots/coverage_efficiency_evolution.png'
@@ -423,6 +486,11 @@ def create_coverage_efficiency_evolution():
     plt.savefig(output_path.replace('.png', '.pdf'), bbox_inches='tight')
     
     print(f"✅ Coverage-efficiency evolution saved: {output_path}")
+    print(f"📊 Total trajectories: 8 (4 COCO + 4 BDD100K models)")
+    print(f"📊 Coverage range: {min(all_coverage):.1f}% - {max(all_coverage):.1f}%")
+    print(f"📊 MPIW range: {min(all_mpiw):.1f} - {max(all_mpiw):.1f} pixels")
+    print(f"📊 Epoch range: {min(all_epochs)} - {max(all_epochs)}")
+    
     return fig
 
 # ============================================================================
@@ -445,10 +513,10 @@ def main():
         fig1 = create_tau_calibration_analysis()
         plt.close(fig1)
         
-        # Create Plot 2: Coverage-Efficiency Evolution (skip for now - focus on plot 1)
-        # print("\n📈 Creating Coverage-Efficiency Evolution Plot...")
-        # fig2 = create_coverage_efficiency_evolution()
-        # plt.close(fig2)
+        # Create Plot 2: Coverage-Efficiency Evolution (COCO only, matching reference style)
+        print("\n📈 Creating Coverage-Efficiency Evolution Plot...")
+        fig2 = create_coverage_efficiency_evolution()
+        plt.close(fig2)
         
         print("\n" + "="*80)
         print("✅ ALL PLOTS GENERATED SUCCESSFULLY!")
